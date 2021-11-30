@@ -1,0 +1,18 @@
+#python
+.idea/
+.ipynb_checkpoints/
+_pycache_/
+__pycache__/
+*.pyc
+
+# distribution/packaging
+*.egg-info/
+
+# matlab
+*.m~
+*.asv
+*.mex*
+
+#folders
+*.DS_Store
+data/
