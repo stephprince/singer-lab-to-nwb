@@ -15,4 +15,4 @@ __pycache__/
 
 #folders
 *.DS_Store
-/data/
+data/
