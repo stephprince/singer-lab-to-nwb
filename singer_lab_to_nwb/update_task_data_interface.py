@@ -1,8 +1,6 @@
 import numpy as np
 import pandas as pd
-import re
 
-from datetime import timedelta, datetime
 from pathlib import Path
 from hdmf.backends.hdf5.h5_utils import H5DataIO
 
@@ -50,93 +48,74 @@ class UpdateTaskVirmenInterface(BaseDataInterface):
             matin = convert_mat_file_to_dict(mat_file)
             virmen_df = pd.DataFrame(matin['virmenData']['data'], columns=matin['virmenData']['dataHeaders'])
 
-            # create behavioral time series objects
+            # create behavioral time series objects and add to processing module
             virmen_time = virmen_df["time"].apply(lambda x: matlab_time_to_datetime(x))
             session_start_time = virmen_time[0]
             timestamps = [(t - session_start_time).total_seconds() for t in virmen_time]
 
             pos_obj, trans_vel_obj, rot_vel_obj, view_angle_obj = create_behavioral_time_series(virmen_df, timestamps)
 
-            # add behavioral time series to processing module
             check_module(nwbfile, 'behavior', 'contains processed behavioral data')
             nwbfile.processing['behavior'].add(pos_obj)
             nwbfile.processing['behavior'].add(trans_vel_obj)
             nwbfile.processing['behavior'].add(rot_vel_obj)
             nwbfile.processing['behavior'].add(view_angle_obj)
 
-            # add behavioral events to processing module
-            licks = np.diff(virmen_df['numLicks'], prepend=virmen_df['numLicks'][0])
-            lick_obj = BehavioralEvents(name='licks')
-            lick_ts = TimeSeries(name='licks',
-                       data=H5DataIO(licks, compression="gzip"),
-                       description='licking events detected by photointerrupter',
-                       unit='au',
-                       resolution=np.nan,
-                       timestamps=H5DataIO(timestamps, compression="gzip")
-                       )
-            lick_obj.add_timeseries(lick_ts)
-            nwbfile.processing['behavior'].add(lick_obj)
+            # create behavioral events objects and add to processing module
+            lick_obj, reward_obj = create_behavioral_events(virmen_df, timestamps)
 
-            rewards = np.diff(virmen_df['numRewards'], prepend=virmen_df['numRewards'][0])
-            reward_obj = BehavioralEvents(name='rewards')
-            reward_ts = TimeSeries(name='rewards',
-                               data=H5DataIO(rewards, compression="gzip"),
-                               description='reward delivery times',
-                               unit='au',
-                               resolution=np.nan,
-                               timestamps=H5DataIO(timestamps, compression="gzip")
-                               )
-            reward_obj.add_timeseries(reward_ts)
+            nwbfile.processing['behavior'].add(lick_obj)
             nwbfile.processing['behavior'].add(reward_obj)
 
-            # add behavioral intervals with epoch and trial tables
-            # get trial start and end times
+            # add behavioral trial info
             task_state_names = (
                 'trial_start', 'initial_cue', 'update_cue', 'delay_cue', 'choice_made', 'reward', 'trial_end',
                 'inter_trial')
             task_state_dict = dict(zip(task_state_names, range(1, 9)))
-            trial_starts = virmen_df.index[virmen_df.taskState == task_state_dict['trial_start']].to_numpy()
+
+            # add 1 to trial start times bc that is when teleportation occurs and world switches to new one and
+            # remove the first trial and last trial bc incomplete and VR environment was likely obscured
+            trial_starts = virmen_df.index[virmen_df.taskState == task_state_dict['trial_start']].to_numpy() + 1
+            trial_starts = trial_starts[:-1]
             trial_ends = virmen_df.index[virmen_df.taskState == task_state_dict['trial_end']].to_numpy()
+            trial_ends = trial_ends[1:]
 
             # add all trials and corresponding info to nwb file
-            for k in range(len(trial_starts)):
-                nwbfile.add_trial(start_time=timestamps[trial_starts[k]], stop_time=timestamps[trial_ends[k]])
+            for t in range(len(trial_starts)):
+                nwbfile.add_trial(start_time=timestamps[trial_starts[t]], stop_time=timestamps[trial_ends[t]])
 
+            # trial maze ids
             maze_names = ('linear', 'ymaze_short', 'ymaze_long', 'ymaze_delay')
             maze_names_dict = dict(zip(maze_names, range(1, 5)))
+            maze_ids = virmen_df['currentWorld'][trial_starts].to_numpy()
+            nwbfile.add_trial_column(name='maze_id', description=f'{maze_names_dict}', data=maze_ids)
 
-            nwbfile.add_trial_column(name='id', description='number of trial in session', data=range(trial_starts))
-            nwbfile.add_trial_column(name='maze_id', description='maze trial occurred in', data=test)
-            nwbfile.add_trial_column(name='turn_type', description='left or right trial', data=test)
-            nwbfile.add_trial_column(name='update_type', description='no-update, stay, or switch trial', data=temp)
-            nwbfile.add_trial_column(name='choice', description='choice animal made', data=temp)
-            nwbfile.add_trial_column(name='correct', description='whether trial was correct or not', data=temp)
-            nwbfile.add_trial_column(name='duration', description='duration from start to end', data=temp)
-            nwbfile.add_trial_column(name='iterations', description='number of samples/vr frames', data=temp)
-            nwbfile.add_trial_column(name='i_delay', description='index when delay started', data=temp)
-            nwbfile.add_trial_column(name='i_update', description='index when update started', data=temp)
-            nwbfile.add_trial_column(name='i_delay2', description='index when second delay started', data=temp)
-            nwbfile.add_trial_column(name='i_choice_made', description='index when choice made', data=temp)
-            nwbfile.add_trial_column(name='delay_location', description='y-position on track where delay occurred',
-                                     data=temp)
-            nwbfile.add_trial_column(name='update_location', description='y-position on track where update occurred',
-                                     data=temp)
+            # trial types l/r, none/stay/switch
+            trial_types_dict = dict(zip(('right', 'left'), range(1,3)))  # flip right and left because projector flips
+            update_names_dict = dict(zip(('nan', 'switch', 'stay'), range(1, 4)))
+            trial_types = virmen_df['trialType'][trial_starts].to_numpy()
+            update_types = virmen_df['trialTypeUpdate'][trial_starts].to_numpy()
+            nwbfile.add_trial_column(name='turn_type', description=f'{trial_types_dict}', data=trial_types)
+            nwbfile.add_trial_column(name='update_type', description=f'{update_names_dict}', data=update_types)
 
-            #
-            # pattern_to_match = str(task_states_dict['interTrial']) + str(task_states_dict['startOfTrial'])
-            # task_states_str = virmen_df['taskState'].astype(int).astype(str)
-            # trial_starts_iloc = np.array([])
-            # for match in re.finditer(pattern_to_match, task_states_long):
-            #     trial_starts_iloc = np.append(trial_starts_iloc, (match.end()))
-            #
-            # for m in re.finditer(pattern_to_match, task_states_long, re.I):
-            #     print(m.group(1))
-            #     trial_starts_iloc = m.end()
-            #
-            # trial_starts_iloc
-            # trial_starts = re.findall('2', task_states_long, re.I).findall(pattern_to_match)
+            # trial choices
+            choice_types = virmen_df['currentZone'][trial_ends].to_numpy()
+            correct_flags = virmen_df['choice'][trial_ends].to_numpy()
+            nwbfile.add_trial_column(name='choice', description='choice animal made', data=choice_types)
+            nwbfile.add_trial_column(name='correct', description='whether trial was correct or not', data=correct_flags)
 
-            # add epochs for the different mazes and phases
+            # trial durations
+            durations_sec = np.array(timestamps)[trial_ends] - np.array(timestamps)[trial_starts]
+            durations_ind = trial_ends - trial_starts
+            nwbfile.add_trial_column(name='duration', description='duration in seconds', data=durations_sec)
+            nwbfile.add_trial_column(name='iterations', description='number of samples/vr frames', data=durations_ind)
+
+            # indices, times, and locations of delay, update, and choice events
+            # use the updateOccurred columns bc these are closer to when the cues actually switch on/off in the VR
+            delays = np.where(np.diff(virmen_df['delayUpdateOccurred'], prepend=0) == 1)[0]
+            updates = np.where(np.diff(virmen_df['updateOccurred'], prepend=0) == 1)[0]
+            choices = virmen_df.index[virmen_df.taskState == task_state_dict['choice_made']].to_numpy()
+
 
 
 def create_behavioral_time_series(df, timestamps):
@@ -174,7 +153,7 @@ def create_behavioral_time_series(df, timestamps):
                                      timestamps=H5DataIO(timestamps, compression="gzip")
                                      )
 
-    # make view angle objection
+    # make view angle object
     view_angle_obj = CompassDirection(name="view_angle")
     view_angle = SpatialSeries(name="view_angle",
                                data=H5DataIO(df['viewAngle'].values, compression="gzip"),
@@ -188,3 +167,65 @@ def create_behavioral_time_series(df, timestamps):
     view_angle_obj.add_spatial_series(view_angle)
 
     return pos_obj, trans_velocity_obj, rot_velocity_obj, view_angle_obj
+
+def create_behavioral_events(df, timestamps):
+    # make lick object
+    licks = np.diff(df['numLicks'], prepend=df['numLicks'][0])
+    lick_obj = BehavioralEvents(name='licks')
+    lick_ts = TimeSeries(name='licks',
+                         data=H5DataIO(licks, compression="gzip"),
+                         description='licking events detected by photointerrupter',
+                         unit='au',
+                         resolution=np.nan,
+                         timestamps=H5DataIO(timestamps, compression="gzip")
+                         )
+    lick_obj.add_timeseries(lick_ts)
+
+    # make reward object
+    rewards = np.diff(df['numRewards'], prepend=df['numRewards'][0])
+    reward_obj = BehavioralEvents(name='rewards')
+    reward_ts = TimeSeries(name='rewards',
+                           data=H5DataIO(rewards, compression="gzip"),
+                           description='reward delivery times',
+                           unit='au',
+                           resolution=np.nan,
+                           timestamps=H5DataIO(timestamps, compression="gzip")
+                           )
+    reward_obj.add_timeseries(reward_ts)
+
+    return lick_obj, reward_obj
+
+def get_task_event_times(df, i_events, timestamps):
+    # indices of delay, update, and choice events
+
+    i_events, i_choices, i_delays, i_delays2 = ([] for i in range(4))
+    for t in range(len(trial_starts)):
+        temp_updates = updates[np.logical_and(updates > trial_starts[t], updates < trial_ends[t])]
+        temp_choices = choices[np.logical_and(choices > trial_starts[t], choices < trial_ends[t])]
+        temp_delays = delays[np.logical_and(delays > trial_starts[t], delays < trial_ends[t])]
+        i_updates.append(temp_updates[0] if 0 < len(temp_updates) else np.nan)
+        i_choices.append(temp_choices[0] if 0 < len(temp_updates) else np.nan)
+        i_delays.append(temp_delays[0] if 0 < len(temp_delays) else np.nan)
+        i_delays2.append(temp_delays[1] if 1 < len(temp_delays) else np.nan)
+    nwbfile.add_trial_column(name='i_delay', description='index when delay started', data=i_delays)
+    nwbfile.add_trial_column(name='i_update', description='index when update started', data=i_updates)
+    nwbfile.add_trial_column(name='i_delay2', description='index when second delay started', data=i_delays2)
+    nwbfile.add_trial_column(name='i_choice_made', description='index when choice made', data=i_choices)
+
+    # times of delay, update, and choice events
+    t_delays = [timestamps[i] if i is not np.nan else i for i in i_delays]
+    t_updates = [timestamps[i] if i is not np.nan else i for i in i_updates]
+    t_choices = [timestamps[i] if i is not np.nan else i for i in i_choices]
+    t_delays2 = [timestamps[i] if i is not np.nan else i for i in i_delays2]
+    nwbfile.add_trial_column(name='t_delay', description='time when delay started', data=t_delays)
+    nwbfile.add_trial_column(name='t_update', description='time when update started', data=t_updates)
+    nwbfile.add_trial_column(name='t_delay2', description='time when second delay started', data=t_delays2)
+    nwbfile.add_trial_column(name='t_choice_made', description='time when choice made', data=t_choices)
+
+    # locations of delay and update events
+    loc_delay = [virmen_df['yPos'][i] if i is not np.nan else i for i in i_delays]
+    loc_updates = [virmen_df['yPos'][i] if i is not np.nan else i for i in i_updates]
+    nwbfile.add_trial_column(name='delay_location', description='y-position on track where delay occurred',
+                             data=loc_delay)
+    nwbfile.add_trial_column(name='update_location', description='y-position on track where update occurred',
+                             data=loc_updates)
