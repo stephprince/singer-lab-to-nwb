@@ -1,11 +1,10 @@
 import warnings
 
-from datetime import datetime
 from nwb_conversion_tools import NWBConverter, SpikeGadgetsRecordingInterface, PhySortingInterface
 from pathlib import Path
 
-from .update_task_data_interface import UpdateTaskVirmenInterface
-from .mat_conversion_utils import convert_mat_file_to_dict
+from update_task_data_interface import UpdateTaskVirmenInterface
+from mat_conversion_utils import convert_mat_file_to_dict
 
 
 class SingerLabNWBConverter(NWBConverter):
@@ -15,11 +14,11 @@ class SingerLabNWBConverter(NWBConverter):
 
     data_interface_classes = dict(
         VirmenData=UpdateTaskVirmenInterface,
-        SpikeGadgetsRecording=SpikeGadgetsRecordingInterface,
-        PhySorting=PhySortingInterface,
+        #SpikeGadgetsRecording=SpikeGadgetsRecordingInterface,
+        #PhySorting=PhySortingInterface,
     )
 
-    def __init__(self):
+    def __init__(self,source_data):
 
         """
                Initialize the NWBConverter object.
@@ -27,13 +26,12 @@ class SingerLabNWBConverter(NWBConverter):
         super().__init__(source_data=source_data)
 
     def get_metadata(self):
-
         virmen_file_path = Path(self.data_interface_objects['VirmenData'].source_data['file_path'])
         session_id = virmen_file_path.stem
 
         metadata = super().get_metadata()
         metadata['NWBFile'].update(
-            experimenter='Steph Prince',
+            experimenter=["Steph Prince"],
             session_id=session_id,
             institution="Georgia Tech",
             lab="Singer",
@@ -41,12 +39,12 @@ class SingerLabNWBConverter(NWBConverter):
                                 "activity was recorded",
         )
 
-        if virmen_file_path.is_file():
+        if virmen_file_path:
             session_data = convert_mat_file_to_dict(mat_file_name=virmen_file_path)
-            subject_data = session_data['virmenData']['sessioninfo']
+            subject_id = session_data['virmenData']["sessioninfo"]
             metadata.update(
                 Subject=dict(
-                    subject_id=subject_data,
+                    subject_id=subject_id,
                     species="Mus Musculus",
                     genotype="Wild type, C57BL/6J",
                     sex="Male",
@@ -56,7 +54,4 @@ class SingerLabNWBConverter(NWBConverter):
         else:
             warnings.warn(f"Warning: no subject file detected for session {session_id}!")
 
-        metadata["Ecephys"]["Device"][0].update(description="64 channel, two-shank NeuroNexus Takahashi probes were "
-                                                            "inserted into dorsal hippocampus (CA1) and medial "
-                                                            "prefrontal cortex (prelimbic, infralimbic) each "
-                                                            "recording session.")
+        return metadata
