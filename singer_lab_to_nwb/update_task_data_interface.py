@@ -34,8 +34,6 @@ class UpdateTaskVirmenInterface(BaseDataInterface):
     def get_metadata_schema(self):
         """Compile metadata schemas from each of the data interface objects."""
         metadata_schema = get_base_schema()
-        # metadata_schema['properties']['SpatialSeries'] = get_schema_from_hdmf_class(SpatialSeries)
-        # metadata_schema['required'].append('SpatialSeries')
         return metadata_schema
 
     def run_conversion(self, nwbfile: NWBFile, metadata: dict):
@@ -116,7 +114,31 @@ class UpdateTaskVirmenInterface(BaseDataInterface):
             updates = np.where(np.diff(virmen_df['updateOccurred'], prepend=0) == 1)[0]
             choices = virmen_df.index[virmen_df.taskState == task_state_dict['choice_made']].to_numpy()
 
+            i_delays, t_delays, loc_delays = get_task_event_times(virmen_df, delays, trial_starts, trial_ends,
+                                                                  timestamps)
+            i_updates, t_updates, loc_updates = get_task_event_times(virmen_df, updates, trial_starts, trial_ends,
+                                                                  timestamps)
+            i_delays2, t_delays2, loc_delays2 = get_task_event_times(virmen_df, delays, trial_starts, trial_ends,
+                                                                     timestamps, event_ind=1)
+            i_choices, t_choices, loc_choices = get_task_event_times(virmen_df, choices, trial_starts, trial_ends,
+                                                                     timestamps)
 
+            nwbfile.add_trial_column(name='i_delay', description='index when delay started', data=i_delays)
+            nwbfile.add_trial_column(name='i_update', description='index when update started', data=i_updates)
+            nwbfile.add_trial_column(name='i_delay2', description='index when second delay started', data=i_delays2)
+            nwbfile.add_trial_column(name='i_choice_made', description='index when choice made', data=i_choices)
+
+            nwbfile.add_trial_column(name='t_delay', description='time when delay started', data=t_delays)
+            nwbfile.add_trial_column(name='t_update', description='time when update started', data=t_updates)
+            nwbfile.add_trial_column(name='t_delay2', description='time when second delay started', data=t_delays2)
+            nwbfile.add_trial_column(name='t_choice_made', description='time when choice made', data=t_choices)
+
+            nwbfile.add_trial_column(name='delay_location', description='y-position on track where delay occurred',
+                                     data=loc_delays)
+            nwbfile.add_trial_column(name='update_location', description='y-position on track where update occurred',
+                                     data=loc_updates)
+            nwbfile.add_trial_column(name='delay2_location', description='y-position on track where delay 2 occurred',
+                                     data=loc_delays2)
 
 def create_behavioral_time_series(df, timestamps):
     # make position object
@@ -195,37 +217,17 @@ def create_behavioral_events(df, timestamps):
 
     return lick_obj, reward_obj
 
-def get_task_event_times(df, i_events, timestamps):
+def get_task_event_times(df, events, trial_starts, trial_ends, timestamps, event_ind=0):
     # indices of delay, update, and choice events
-
-    i_events, i_choices, i_delays, i_delays2 = ([] for i in range(4))
+    i_events = []
     for t in range(len(trial_starts)):
-        temp_updates = updates[np.logical_and(updates > trial_starts[t], updates < trial_ends[t])]
-        temp_choices = choices[np.logical_and(choices > trial_starts[t], choices < trial_ends[t])]
-        temp_delays = delays[np.logical_and(delays > trial_starts[t], delays < trial_ends[t])]
-        i_updates.append(temp_updates[0] if 0 < len(temp_updates) else np.nan)
-        i_choices.append(temp_choices[0] if 0 < len(temp_updates) else np.nan)
-        i_delays.append(temp_delays[0] if 0 < len(temp_delays) else np.nan)
-        i_delays2.append(temp_delays[1] if 1 < len(temp_delays) else np.nan)
-    nwbfile.add_trial_column(name='i_delay', description='index when delay started', data=i_delays)
-    nwbfile.add_trial_column(name='i_update', description='index when update started', data=i_updates)
-    nwbfile.add_trial_column(name='i_delay2', description='index when second delay started', data=i_delays2)
-    nwbfile.add_trial_column(name='i_choice_made', description='index when choice made', data=i_choices)
+        temp = events[np.logical_and(events > trial_starts[t], events < trial_ends[t])]
+        i_events.append(temp[event_ind] if event_ind < len(temp) else np.nan)
 
     # times of delay, update, and choice events
-    t_delays = [timestamps[i] if i is not np.nan else i for i in i_delays]
-    t_updates = [timestamps[i] if i is not np.nan else i for i in i_updates]
-    t_choices = [timestamps[i] if i is not np.nan else i for i in i_choices]
-    t_delays2 = [timestamps[i] if i is not np.nan else i for i in i_delays2]
-    nwbfile.add_trial_column(name='t_delay', description='time when delay started', data=t_delays)
-    nwbfile.add_trial_column(name='t_update', description='time when update started', data=t_updates)
-    nwbfile.add_trial_column(name='t_delay2', description='time when second delay started', data=t_delays2)
-    nwbfile.add_trial_column(name='t_choice_made', description='time when choice made', data=t_choices)
+    t_events = [timestamps[i] if i is not np.nan else i for i in i_events]
 
     # locations of delay and update events
-    loc_delay = [virmen_df['yPos'][i] if i is not np.nan else i for i in i_delays]
-    loc_updates = [virmen_df['yPos'][i] if i is not np.nan else i for i in i_updates]
-    nwbfile.add_trial_column(name='delay_location', description='y-position on track where delay occurred',
-                             data=loc_delay)
-    nwbfile.add_trial_column(name='update_location', description='y-position on track where update occurred',
-                             data=loc_updates)
+    loc_events = [df['yPos'][i] if i is not np.nan else i for i in i_events]
+
+    return i_events, t_events, loc_events

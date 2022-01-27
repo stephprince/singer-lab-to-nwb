@@ -27,7 +27,7 @@ class SingerLabNWBConverter(NWBConverter):
 
     def get_metadata(self):
         virmen_file_path = Path(self.data_interface_objects['VirmenData'].source_data['file_path'])
-        session_id = virmen_file_path.stem
+        session_id = virmen_file_path.parent.stem
 
         metadata = super().get_metadata()
         metadata['NWBFile'].update(
@@ -35,8 +35,7 @@ class SingerLabNWBConverter(NWBConverter):
             session_id=session_id,
             institution="Georgia Tech",
             lab="Singer",
-            session_description="Mice were head-fixed and performed the update task in virtual reality while neural "
-                                "activity was recorded",
+            session_description="Head-fixed mice performed update task in virtual reality",
         )
 
         if virmen_file_path:

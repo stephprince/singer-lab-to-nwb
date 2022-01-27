@@ -28,4 +28,4 @@ plot_probe_group(probegroup, with_channel_index=True, same_axes=False)
 plt.show()
 
 # save the probe object
-write_prb("../data/ProbeDataupdate-task-64-chan-dual-probes.prb", probegroup)
+write_prb("../data/ProbeData/update-task-64-chan-dual-probes.prb", probegroup)

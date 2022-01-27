@@ -13,7 +13,7 @@ def get_file_paths(session_id):
     virmen_path = base_path / "Virmen Logs" / "UpdateTask" / session_id / "virmenDataRaw.mat"
     kilosort_paths = processed_ephys_path / "CA1" / "sorted" / "kilosort"
     probe_path = base_path / "ProbeData" / "update-task-64-chan-dual-probes.prb"
-    nwbfile_path = base_path / "NWBFile" / session_id
+    nwbfile_path = base_path / "NWBFile" / f"{session_id}.nwb"
 
     return dict(raw_ephys=raw_ephys_path,
                 processed_ephys=processed_ephys_path,
