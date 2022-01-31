@@ -51,9 +51,10 @@ class UpdateTaskVirmenInterface(BaseDataInterface):
             session_start_time = virmen_time[0]
             timestamps = [(t - session_start_time).total_seconds() for t in virmen_time]
 
-            pos_obj, trans_vel_obj, rot_vel_obj, view_angle_obj = create_behavioral_time_series(virmen_df, timestamps)
+            time, pos_obj, trans_vel_obj, rot_vel_obj, view_angle_obj = create_behavioral_time_series(virmen_df, timestamps)
 
             check_module(nwbfile, 'behavior', 'contains processed behavioral data')
+            nwbfile.processing['behavior'].add(time)
             nwbfile.processing['behavior'].add(pos_obj)
             nwbfile.processing['behavior'].add(trans_vel_obj)
             nwbfile.processing['behavior'].add(rot_vel_obj)
@@ -141,6 +142,13 @@ class UpdateTaskVirmenInterface(BaseDataInterface):
                                      data=loc_delays2)
 
 def create_behavioral_time_series(df, timestamps):
+    # make time object
+    time = TimeSeries(name='time',
+                      data=H5DataIO(timestamps, compression="gzip"),
+                      unit='s',
+                      resolution=np.nan,
+                      timestamps=H5DataIO(timestamps, compression="gzip")
+                      )
     # make position object
     pos_obj = Position(name="position")
     position = SpatialSeries(name='position',
@@ -188,7 +196,7 @@ def create_behavioral_time_series(df, timestamps):
                                )
     view_angle_obj.add_spatial_series(view_angle)
 
-    return pos_obj, trans_velocity_obj, rot_velocity_obj, view_angle_obj
+    return time, pos_obj, trans_velocity_obj, rot_velocity_obj, view_angle_obj
 
 def create_behavioral_events(df, timestamps):
     # make lick object
