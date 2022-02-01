@@ -1,6 +1,6 @@
 import warnings
 
-from nwb_conversion_tools import NWBConverter, SpikeGadgetsRecordingInterface, PhySortingInterface
+from nwb_conversion_tools import NWBConverter, PhySortingInterface, CellExplorerSortingInterface
 from pathlib import Path
 
 from update_task_data_interface import UpdateTaskVirmenInterface
@@ -15,7 +15,7 @@ class SingerLabNWBConverter(NWBConverter):
     data_interface_classes = dict(
         VirmenData=UpdateTaskVirmenInterface,
         #SpikeGadgetsRecording=SpikeGadgetsRecordingInterface,
-        #PhySorting=PhySortingInterface,
+        CellExplorerSorting=CellExplorerSortingInterface,
     )
 
     def __init__(self,source_data):
@@ -52,5 +52,11 @@ class SingerLabNWBConverter(NWBConverter):
             )
         else:
             warnings.warn(f"Warning: no subject file detected for session {session_id}!")
+
+        # if kilosort_file_path:
+        #     metadata["Ecephys"]["Device"][0].update(description=device_descr)
+        #     metadata["Ecephys"]["Electrodes"].append()
+        # else:
+        #     warnings.warn(f"Warning: no kilosort file detected for session {session_id}!")
 
         return metadata

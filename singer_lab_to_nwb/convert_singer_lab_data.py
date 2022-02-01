@@ -3,8 +3,9 @@ from singer_lab_nwb_converter import SingerLabNWBConverter
 from update_task_conversion_utils import get_file_paths
 
 # get file paths for conversion
-session_id = "S25_210913_1"
-file_paths = get_file_paths(session_id)
+session_id = "S25_210913"
+rec_id = "1"
+file_paths = get_file_paths(session_id, rec_id)
 
 # run conversion processes
 stub_test = True
@@ -17,12 +18,13 @@ source_data = dict(
     #     gains=conversion_gain,  # SpikeGadgets requires manual specification of the conversion factor
     #     probe_file_path=str(file_paths["probe"]),
     # ),
-    #PhySorting=dict(folder_path=str(file_paths["kilosort"]), exclude_cluster_groups=["noise", "mua"])
+    CellExplorerSorting=dict(spikes_matfile_path=str(file_paths["cell_explorer"])),
 )
 
 conversion_options = dict(
     #SpikeGadgetsRecording=dict(stub_test=stub_test),
-    #PhySorting=dict(stub_test=stub_test),
+    #PhySortingCA1=dict(stub_test=stub_test),
+    CellExplorerSorting=dict(stub_test=stub_test)
 )
 
 converter = SingerLabNWBConverter(source_data=source_data)
