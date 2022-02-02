@@ -14,8 +14,10 @@ class SingerLabNWBConverter(NWBConverter):
 
     data_interface_classes = dict(
         VirmenData=UpdateTaskVirmenInterface,
+        PhySortingCA1=PhySortingInterface,
+        PhySortingPFC=PhySortingInterface
         #SpikeGadgetsRecording=SpikeGadgetsRecordingInterface,
-        CellExplorerSorting=CellExplorerSortingInterface,
+        #CellExplorerSorting=CellExplorerSortingInterface,
     )
 
     def __init__(self,source_data):
@@ -53,10 +55,12 @@ class SingerLabNWBConverter(NWBConverter):
         else:
             warnings.warn(f"Warning: no subject file detected for session {session_id}!")
 
-        # if kilosort_file_path:
-        #     metadata["Ecephys"]["Device"][0].update(description=device_descr)
-        #     metadata["Ecephys"]["Electrodes"].append()
-        # else:
-        #     warnings.warn(f"Warning: no kilosort file detected for session {session_id}!")
+        #if "Ecephys" not in metadata:
+        #    metadata.update(Ecephys=SpikeGadgetsRecordingInterface.get_ecephys_metadata(xml_file_path=xml_file_path))
+
+        # metadata["Ecephys"]["UnitProperties"] = [dict(name='Amplitude', description='amplitude of spike'),
+        #                                          dict(name='ContamPct', description='proportion spikes within ISI'),
+        #                                          dict(name='KSLabel', description='auto-kilosort label (pre-curation)')
+        # ]
 
         return metadata

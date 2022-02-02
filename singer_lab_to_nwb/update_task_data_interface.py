@@ -158,7 +158,6 @@ def create_behavioral_time_series(df, timestamps):
                              reference_frame='forwards is positive, backwards is negative, left is positive, and '
                                              'right is negative because the projector flips the display on the '
                                              'x-axis',
-                             unit='au',
                              resolution=np.nan,
                              timestamps=H5DataIO(timestamps, compression="gzip")
                              )
@@ -188,7 +187,6 @@ def create_behavioral_time_series(df, timestamps):
     view_angle = SpatialSeries(name="view_angle",
                                data=H5DataIO(df['viewAngle'].values, compression="gzip"),
                                description='direction of mouse in the virtual reality environment',
-                               unit='radians',
                                reference_frame='left is positive, and right is negative because the projector flips '
                                                'the display on the x-axis',
                                resolution=np.nan,
