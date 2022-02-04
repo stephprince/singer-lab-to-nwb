@@ -5,32 +5,27 @@ from update_task_conversion_utils import get_file_paths, update_phy_unit_ids
 # get file paths for conversion
 session_id = "S25_210913"
 rec_id = "1"
-brain_regions = ['CA1','PFC']
+brain_regions = ['CA1', 'PFC']
+vr_files = [1, 0, 1]
 file_paths = get_file_paths(session_id, rec_id)
 
 # run conversion processes
 stub_test = True
-#conversion_gain = [0.195]
 
 source_data = dict(
     VirmenData=dict(file_path=str(file_paths["virmen"])),
     PreprocessedData=dict(processed_data_folder=str(file_paths["processed_ephys"]),
                           channel_map_path=str(file_paths["channel_map"]),
-                          brain_regions=brain_regions),
+                          brain_regions=brain_regions,
+                          vr_files=vr_files),
     PhySortingCA1=dict(folder_path=str(file_paths["kilosort_CA1"]), exclude_cluster_groups=["noise", "mua"]),
     PhySortingPFC=dict(folder_path=str(file_paths["kilosort_PFC"]), exclude_cluster_groups=["noise", "mua"]),
-    # SpikeGadgetsRecording=dict(
-        #     filename=str(file_paths["raw_ephys"]),
-        #     gains=conversion_gain,  # SpikeGadgets requires manual specification of the conversion factor
-        #     probe_file_path=str(file_paths["probe"]),
-        # ),
     #CellExplorerSorting=dict(spikes_matfile_path=str(file_paths["cell_explorer"])),
 )
 
 conversion_options = dict(
     PhySortingCA1=dict(stub_test=stub_test),
     PhySortingPFC=dict(stub_test=stub_test),
-    #SpikeGadgetsRecording=dict(stub_test=stub_test),
     #CellExplorerSorting=dict(stub_test=stub_test)
 )
 

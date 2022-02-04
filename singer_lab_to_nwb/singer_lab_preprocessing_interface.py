@@ -8,9 +8,9 @@ from hdmf.backends.hdf5.h5_utils import H5DataIO
 from pynwb import NWBFile
 from pynwb.device import Device
 from pynwb.ecephys import ElectrodeGroup
+from pynwb.epoch import TimeIntervals
 from nwb_conversion_tools.basedatainterface import BaseDataInterface
 from nwb_conversion_tools.utils.json_schema import get_base_schema, get_schema_from_hdmf_class
-from scipy.io import loadmat
 
 from mat_conversion_utils import convert_mat_file_to_dict
 
@@ -26,7 +26,7 @@ class SingerLabPreprocessingInterface(BaseDataInterface):
     def get_source_schema(cls):
         """Compile input schemas from each of the data interface classes."""
         source_schema = dict(
-            required=['processed_data_folder','channel_map_path'],
+            required=['processed_data_folder', 'channel_map_path'],
             properties=dict(
                 file_path=dict(type='string'),
                 channel_map_path=dict(type='string'),
@@ -115,58 +115,62 @@ class SingerLabPreprocessingInterface(BaseDataInterface):
         brain_regions = np.unique([e['location'] for e in metadata['Ecephys']['ElectrodeGroup']])
 
         # extract recording times to epochs, same for both brain regions
-        # use eeg files as basis bc likely to be most consistent across singer lab recordings
         base_path = processed_data_folder / brain_regions[0] / '0'
-        filenames = glob.glob(str(base_path) + '/eeg*.mat')
-        recording_epochs = TimeIntervals(
-            name="recording_epochs",
-            description='During one recording session, the acquisition is stopped and restarted for switching '
-                        'behavioral periods, refilling with saline, etc. Electrophysiological files are stitched '
-                        'together and these epochs indicate the start and stop times within a recording session. These '
-                        'files are NOT continuous and there is a short interval of approx 1-5 min between them.'
-        )
-        recording_epochs.add_column(name="behavior_task",
-                                    description="indicates whether VR task was displayed on the screen (1), or if the "
-                                                "screen was left covered/blank as a baseline period (0)")
+        filenames = glob.glob(str(base_path) + '/eeg*.mat') # use eeg files bc most consistent name across singer lab
 
-        start_time = 0.0  # initialize start time to 0 sec
-        for ind, f in enumerate(filenames):
-            # determine recording duration
-            matin = convert_mat_file_to_dict(f)
-            try:  # catch for first file vs subsequent ones
-                eeg_mat = matin['eeg'][int(subject_num) - 1][int(session_date) - 1][ind] # subtract 1 because 0-based indexing
-            except TypeError:
-                eeg_mat = matin['eeg'][int(subject_num) - 1][int(session_date) - 1]
-
-            # add to nwb file
-            duration = (len(eeg_mat.time) / eeg_mat.samprate) # in seconds
-            recording_epochs.add_row(start_time=start_time, stop_time=start_time+duration, recording_epochs=temp)
-            start_time = start_time + duration
-
+        recording_epochs = get_recording_epochs(filenames, self.source_data['vr_files'], subject_num, session_date)
         nwbfile.add_time_intervals(recording_epochs)
 
-        #
-        for region in brain_regions:
-            mat = matin['eeg'][subject_num - 1][session_date - 1] # subtract 1 because 0-based indexing
+        # extract analog signals (continuous, stored as acquisition time series)
+        analog_signals = ['licks', 'rotVelocity', 'transVelocity']
 
-
-        # use the first channel of the first region for this
-
-        # extract analog signals
-        analog_signals = ['licks', 'rotVelocity', 'transVelocity'] # stored as acquisition time series?
-        digital_signals = ['delay', 'trial', 'update'] # stored as behavioral events
-
-        # extract digital signals
+        # extract digital signals (non-continuous, stored as behavioral events)
+        digital_signals = ['delay', 'trial', 'update']
 
         # load probe and channel details
         probe_file_path = Path(self.source_data['channel_map_path'])
         df = pd.read_csv(probe_file_path)
 
         # extract filtered lfp signals
+        signal_bands = ['eeg', 'theta', 'nontheta', 'ripple']
+        for br in brain_regions:
+            for ch in channels:
+                base_path = processed_data_folder / br / ch
+
+
+        # extract lfp event times
+        event_types
 
 
 
-        # if Path(mat_file).is_file():
-        #     # convert the mat file into dict and data frame format
-        #     matin = convert_mat_file_to_dict(mat_file)
+def get_recording_epochs(filenames, vr_files, subject_num, session_date):
+    # make time intervals structure
+    recording_epochs = TimeIntervals(
+        name="recording_epochs",
+        description='During one recording session, the acquisition is stopped and restarted for switching '
+                    'behavioral periods, refilling with saline, etc. Electrophysiological files are stitched '
+                    'together and these epochs indicate the start and stop times within a recording session. These '
+                    'epochs are NOT continuous and there is a short interval of approx 1-5 min between them.'
+    )
+    recording_epochs.add_column(name="behavior_task",
+                                description="indicates whether VR task was displayed on the screen (1), or if the "
+                                            "screen was left covered/blank as a baseline period (0)")
 
+    # loop through files to get time intervals
+    start_time = 0.0  # initialize start time to 0 sec
+    for ind, f in enumerate(filenames):
+        # determine recording duration
+        matin = convert_mat_file_to_dict(f)
+        try:  # catch for first file vs subsequent ones
+            eeg_mat = matin['eeg'][int(subject_num) - 1][int(session_date) - 1][
+                ind]  # subtract 1 because 0-based indexing
+        except TypeError:
+            eeg_mat = matin['eeg'][int(subject_num) - 1][int(session_date) - 1]
+
+        # add to nwb file
+        duration = (len(eeg_mat.time) / eeg_mat.samprate)  # in seconds
+        recording_epochs.add_row(start_time=start_time, stop_time=start_time + duration,
+                                 behavior_task=vr_files[ind])
+        start_time = start_time + duration
+
+    return recording_epochs

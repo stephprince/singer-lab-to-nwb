@@ -98,6 +98,3 @@ def flatten_nested_dict(nested_dict):
             flatten_dict[k] = v
 
     return flatten_dict
-
-def convert_singer_lab_mat_data_format(filename):
-    matin['eeg'][0][24][0][210912][0][]
