@@ -7,9 +7,9 @@ from hdmf.backends.hdf5.h5_utils import H5DataIO
 from pynwb import NWBFile, TimeSeries
 from pynwb.behavior import SpatialSeries, Position, CompassDirection, BehavioralEvents
 from nwb_conversion_tools.basedatainterface import BaseDataInterface
-from nwb_conversion_tools.utils.json_schema import get_base_schema, get_schema_from_hdmf_class
+from nwb_conversion_tools.utils.json_schema import get_base_schema
 
-from mat_conversion_utils import convert_mat_file_to_dict, create_indexed_array
+from mat_conversion_utils import convert_mat_file_to_dict
 from update_task_conversion_utils import matlab_time_to_datetime, check_module
 
 
@@ -40,7 +40,7 @@ class UpdateTaskVirmenInterface(BaseDataInterface):
         """Primary conversion function for the custom Singer lab behavioral interface."""
         # convert the mat file into a nested dict format
         mat_file = self.source_data['file_path'] # TODO - load virmen file from processed data folder to get syncing
-
+        # TODO - add time intervals indicating no VR displayed vs VR displayed
         if Path(mat_file).is_file():
             # convert the mat file into dict and data frame format
             matin = convert_mat_file_to_dict(mat_file)

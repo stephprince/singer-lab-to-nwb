@@ -15,9 +15,9 @@ class SingerLabNWBConverter(NWBConverter):
 
     data_interface_classes = dict(
         VirmenData=UpdateTaskVirmenInterface,
+        PreprocessedData=SingerLabPreprocessingInterface,
         PhySortingCA1=PhySortingInterface,
         PhySortingPFC=PhySortingInterface,
-        PreprocessedData=SingerLabPreprocessingInterface,
         # CellExplorerSorting=CellExplorerSortingInterface,
     )
 
@@ -29,11 +29,13 @@ class SingerLabNWBConverter(NWBConverter):
         super().__init__(source_data=source_data)
 
     def get_metadata(self):
+        metadata = super().get_metadata()
+
         # add general experiment info
         virmen_file_path = Path(self.data_interface_objects['VirmenData'].source_data['file_path'])
         session_id = virmen_file_path.parent.stem
 
-        metadata = super().get_metadata()
+
         metadata['NWBFile'].update(
             experimenter=["Steph Prince"],
             session_id=session_id,
@@ -58,43 +60,12 @@ class SingerLabNWBConverter(NWBConverter):
         else:
             warnings.warn(f"Warning: no subject file detected for session {session_id}!")
 
-        # add ecephys info
-        brain_regions = self.data_interface_objects['PreprocessedData'].source_data['brain_regions']
-        brain_region_groups = [br for br in brain_regions for _ in range(2)] # double list so region for each shank
-        channel_groups = range(len(brain_region_groups))
-
-        spikegadgets = [dict(
-            name="spikegadgets",
-            description="Two NeuroNexus silicon probes with 2 (shanks) x 32 (channels) on each probe were inserted into"
-                        " hippocampal CA1 and medial prefrontal cortex. Probes were 64-chan, poly5 Takahashi probe "
-                        "formats. Electrophysiological data were acquired using a SpikeGadgets system digitized with 30"
-                        " kHz rate."
-        )
-        ]
-
-        electrode_group = [dict(
-            name=f'shank{n+1}',
-            description=f'shank{n+1} of NeuroNexus probes. Shanks 1-2 belong to probe 1, Shanks 3-4 belong to probe 2',
-            location=brain_region_groups[n],
-            device='spikegadgets')
-            for n, _ in enumerate(channel_groups)
-        ]
-
-        metadata["Ecephys"] = dict(
-            Device=spikegadgets,
-            ElectrodeGroup=electrode_group,
-            Electrodes=[
-                dict(name="electrode_number",
-                     description="0-indexed channel within the probe. Channels 0-31 belong to shank 1 and channels 32-64"
-                                " belong to shank 2"),
-                dict(name="group_name", description="Name of the electrode group this electrode is part of")
-            ]
-        )
-
         # add spike sorting column info
-        metadata["Ecephys"]["UnitProperties"] = [dict(name='Amplitude', description='amplitude imported from phy'),
-                                                 dict(name='ContamPct', description='contampct imported from phy'),
-                                                 dict(name='KSLabel', description='auto-kilosort label (pre-curation)')
-                                                 ]
+        sorted_path = Path(self.data_interface_objects['PhySortingCA1'].source_data['folder_path'])
+        if sorted_path:
+            metadata["Ecephys"]["UnitProperties"] = [dict(name='Amplitude', description='amplitude imported from phy'),
+                                                     dict(name='ContamPct', description='contampct imported from phy'),
+                                                     dict(name='KSLabel', description='auto-label (pre-curation)')
+                                                     ]
 
         return metadata
