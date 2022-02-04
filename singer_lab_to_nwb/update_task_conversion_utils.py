@@ -12,13 +12,14 @@ def get_file_paths(session_id, rec_id):
     """
 
     base_path = Path("Y:/singer/Steph/Code/singer-lab-to-nwb/data")
-    raw_ephys_path = base_path / "RawData" / "UpdateTask" / session_id
+    raw_ephys_path = base_path / "RawData" / "UpdateTask" / session_id / 'recording1_20210913_170611.rec'
     processed_ephys_path = base_path / "ProcessedData" / "UpdateTask" / session_id
     virmen_path = base_path / "Virmen Logs" / "UpdateTask" / f"{session_id}_{rec_id}" / "virmenDataRaw.mat"
     kilosort_path_CA1 = processed_ephys_path / "CA1" / "sorted" / "kilosort"
     kilosort_path_PFC = processed_ephys_path / "PFC" / "sorted" / "kilosort"
-    cell_explorer_path = kilosort_path_CA1 / f"{session_id}_CA1.spikes.cellinfo.mat"
-    probe_path = base_path / "ProbeData" / "update-task-64-chan-dual-probes.prb"
+    #cell_explorer_path = kilosort_path_CA1 / f"{session_id}_CA1.spikes.cellinfo.mat"
+    #probe_path = base_path / "ProbeData" / "update-task-64-chan-dual-probes.prb"
+    channel_map_path = base_path / "ProbeData" / "A2x32-Poly5-10mm-20s-200-100-probemap.csv"
     nwbfile_path = str(base_path / "NWBFile" / f"{session_id}.nwb")
 
     return dict(raw_ephys=raw_ephys_path,
@@ -26,8 +27,7 @@ def get_file_paths(session_id, rec_id):
                 virmen=virmen_path,
                 kilosort_CA1=kilosort_path_CA1,
                 kilosort_PFC=kilosort_path_PFC,
-                cell_explorer=cell_explorer_path,
-                probe=probe_path,
+                channel_map=channel_map_path,
                 nwbfile=nwbfile_path
                 )
 
@@ -72,6 +72,7 @@ def get_number_of_units(phy_folder):
     return len(np.unique(spike_clusters))
 
 def remap_unit_ids(phy_folder, start_id=0):
+    # TODO - remap the channel numbers for the electrodes as well??
     # make output path name
     phy_folder = Path(phy_folder)
     phy_folder_new = phy_folder / 'new_unit_ids'

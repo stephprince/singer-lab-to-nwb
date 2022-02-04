@@ -39,7 +39,7 @@ class UpdateTaskVirmenInterface(BaseDataInterface):
     def run_conversion(self, nwbfile: NWBFile, metadata: dict):
         """Primary conversion function for the custom Singer lab behavioral interface."""
         # convert the mat file into a nested dict format
-        mat_file = self.source_data['file_path']
+        mat_file = self.source_data['file_path'] # TODO - load virmen file from processed data folder to get syncing
 
         if Path(mat_file).is_file():
             # convert the mat file into dict and data frame format
