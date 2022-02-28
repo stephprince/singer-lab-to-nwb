@@ -10,7 +10,7 @@ To install packages in development mode
 
 ```python
 cd /path/to/files/singer-lab-to-nwb/
-pip install -e singer_lab_to_nwb
+pip install -e .
 ```
 
 The main conversion script is `convert_singer_lab_data.py`. This script uses the nwb_conversion_tools workflow.
