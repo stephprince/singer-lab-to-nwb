@@ -14,6 +14,8 @@ stub_test = True
 
 source_data = dict(
     VirmenData=dict(file_path=str(file_paths["virmen"])),
+    SpikeGadgetsData=dict(raw_data_folder=str(file_paths['raw_ephys_path']),
+                          brain_regions=brain_regions),
     PreprocessedData=dict(processed_data_folder=str(file_paths["processed_ephys"]),
                           channel_map_path=str(file_paths["channel_map"]),
                           brain_regions=brain_regions,

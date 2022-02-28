@@ -12,7 +12,7 @@ def get_file_paths(session_id, rec_id):
     """
 
     base_path = Path("Y:/singer/Steph/Code/singer-lab-to-nwb/data")
-    raw_ephys_path = base_path / "RawData" / "UpdateTask" / session_id / 'recording1_20210913_170611.rec'
+    raw_ephys_path = base_path / "RawData" / "UpdateTask" / session_id
     processed_ephys_path = base_path / "ProcessedData" / "UpdateTask" / session_id
     virmen_path = base_path / "Virmen Logs" / "UpdateTask" / f"{session_id}_{rec_id}" / "virmenDataRaw.mat"
     kilosort_path_CA1 = processed_ephys_path / "CA1" / "sorted" / "kilosort"

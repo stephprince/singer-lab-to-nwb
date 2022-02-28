@@ -13,7 +13,7 @@ from nwb_conversion_tools.basedatainterface import BaseDataInterface
 from nwb_conversion_tools.utils.json_schema import get_base_schema, get_schema_from_hdmf_class
 
 from mat_conversion_utils import convert_mat_file_to_dict
-
+from readTrodesExtractedDataFile3 import readTrodesExtractedDataFile
 
 class SingerLabPreprocessingInterface(BaseDataInterface):
     """
@@ -115,14 +115,18 @@ class SingerLabPreprocessingInterface(BaseDataInterface):
         brain_regions = np.unique([e['location'] for e in metadata['Ecephys']['ElectrodeGroup']])
 
         # extract recording times to epochs, same for both brain regions
-        base_path = processed_data_folder / brain_regions[0] / '0'
-        filenames = glob.glob(str(base_path) + '/eeg*.mat') # use eeg files bc most consistent name across singer lab
+        base_path = processed_data_folder / brain_regions[0]
+        filenames = glob.glob(str(base_path) + '/0/eeg*.mat')  # use eeg files bc most consistent name across singer lab
 
         recording_epochs = get_recording_epochs(filenames, self.source_data['vr_files'], subject_num, session_date)
         nwbfile.add_time_intervals(recording_epochs)
 
+        sg_rec_name = 'Y:\\singer\\Steph\\Code\\singer-lab-to-nwb\\data\\RawData\\UpdateTask\\S25_210913\\recording1_20210913_170611.rec'
+        add_electrical_series(recording=SpikeGadgetsRecordingExtractor(sg_rec_name, stream_id='trodes'), nwbfile=nwbfile)
         # extract analog signals (continuous, stored as acquisition time series)
-        analog_signals = ['licks', 'rotVelocity', 'transVelocity']
+        analog_obj = get_analog_timeseries(processed_data_folder, subject_num, session_date)
+        for analog_ts in analog_obj:
+            nwbfile.add_acquisition(analog_ts)
 
         # extract digital signals (non-continuous, stored as behavioral events)
         digital_signals = ['delay', 'trial', 'update']
@@ -159,13 +163,8 @@ def get_recording_epochs(filenames, vr_files, subject_num, session_date):
     # loop through files to get time intervals
     start_time = 0.0  # initialize start time to 0 sec
     for ind, f in enumerate(filenames):
-        # determine recording duration
-        matin = convert_mat_file_to_dict(f)
-        try:  # catch for first file vs subsequent ones
-            eeg_mat = matin['eeg'][int(subject_num) - 1][int(session_date) - 1][
-                ind]  # subtract 1 because 0-based indexing
-        except TypeError:
-            eeg_mat = matin['eeg'][int(subject_num) - 1][int(session_date) - 1]
+        # load singer mat structure
+        eeg_mat = convert_singer_mat_to_scipy_obj(f, subject_num, session_date, ind)
 
         # add to nwb file
         duration = (len(eeg_mat.time) / eeg_mat.samprate)  # in seconds
@@ -174,3 +173,46 @@ def get_recording_epochs(filenames, vr_files, subject_num, session_date):
         start_time = start_time + duration
 
     return recording_epochs
+
+def get_analog_timeseries(data_folder, subject_num, session_date):
+    # define analog signals saved in data
+    analog_signals = ['licks', 'rotVelocity', 'transVelocity']
+    analog_signals_descript = ['signal from photointerrupter circuit, values of 5V indicate the mouse tongue is has '
+                               'broken through the laser beam, values of 0V indicate baseline',
+                               'movement of the spherical treadmill along the roll axis as measured by an optical'
+                               'gaming mouse and filtered through a lab view function, maximum values of -10 and 10V',
+                               'movement of the spherical treadmill along the pitch axis as measured by an optical'
+                               'gaming mouse and filtered through a lab view function, maximum values of -10 and 10V']
+
+    # look through signals and generate electrical series
+    analog_dict = dict(zip(analog_signals, analog_signals_descript))
+    for name, descript in analog_dict.items():
+        # append the electrical series across recording files
+        filenames = glob.glob(str(data_folder) + f'/{name}*.mat')
+        for ind, f in enumerate(filenames):
+            # load singer lab mat structure
+            analog_obj = convert_singer_mat_to_scipy_obj(f, subject_num, session_date, ind)
+
+            # append series data
+            full_series[name].append(analog_obj.data)
+            rate[name] = analog_obj.sampling_rate
+
+        # general electrical series objects
+        analog_obj[name] = ElectricalSeries(name=name,
+                                           data=H5DataIO(full_series[name], compression='gzip'),
+                                           starting_time=0,
+                                           rate=rate[name],
+                                           description=descript)
+    return analog_obj
+
+def convert_singer_mat_to_scipy_obj(filename, subject_num, session_date, rec_num):
+    # load matlab file
+    matin = convert_mat_file_to_dict(filename)
+
+    try:  # catch for first file vs subsequent ones
+        mat_obj = matin['eeg'][int(subject_num) - 1][int(session_date) - 1][rec_num]  # subtract 1 because 0-based indexing
+    except TypeError:
+        mat_obj = matin['eeg'][int(subject_num) - 1][int(session_date) - 1]
+
+    return mat_obj
+

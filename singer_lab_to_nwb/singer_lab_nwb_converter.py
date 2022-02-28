@@ -5,6 +5,7 @@ from pathlib import Path
 
 from update_task_virmen_interface import UpdateTaskVirmenInterface
 from singer_lab_preprocessing_interface import SingerLabPreprocessingInterface
+from spikegadgets_binaries_interface import SpikeGadgetsBinariesInterface
 from mat_conversion_utils import convert_mat_file_to_dict
 
 
@@ -15,6 +16,7 @@ class SingerLabNWBConverter(NWBConverter):
 
     data_interface_classes = dict(
         VirmenData=UpdateTaskVirmenInterface,
+        SpikeGadgetsData=SpikeGadgetsBinariesInterface,
         PreprocessedData=SingerLabPreprocessingInterface,
         PhySortingCA1=PhySortingInterface,
         PhySortingPFC=PhySortingInterface,
