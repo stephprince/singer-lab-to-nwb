@@ -77,31 +77,39 @@ class SingerLabPreprocessingInterface(BaseDataInterface):
         channel_groups = range(len(brain_region_groups))
 
         spikegadgets = [dict(
-            name="spikegadgets",
+            name="spikegadgets_mcu",
             description="Two NeuroNexus silicon probes with 2 (shanks) x 32 (channels) on each probe were inserted into"
                         " hippocampal CA1 and medial prefrontal cortex. Probes were 64-chan, poly5 Takahashi probe "
-                        "formats. Electrophysiological data were acquired using a SpikeGadgets system digitized with 30"
-                        " kHz rate."
-        )
+                        "formats. Electrophysiological data were acquired using a SpikeGadgets MCU system digitized "
+                        "with 30 kHz rate. Analog and digital channels were acquired using the SpikeGadgets ECU system."
+        ),
+            dict(name="spikegadgets_ecu",
+                 description="Analog and digital inputs of SpikeGadgets system. Max -10 to 10V for analog channels.")
         ]
 
         electrode_group = [dict(
             name=f'shank{n + 1}',
             description=f'shank{n + 1} of NeuroNexus probes. Shanks 1-2 belong to probe 1, Shanks 3-4 belong to probe 2',
             location=brain_region_groups[n],
-            device='spikegadgets')
+            device='spikegadgets_mcu')
             for n, _ in enumerate(channel_groups)
         ]
+        electrode_group.append(dict(
+            name='analog_inputs',
+            description='analog inputs to SpikeGadgets system. Channel IDs are unique to the project and task.',
+            location='none',
+            device='spikegadgets_ecu')
+        )
 
         metadata["Ecephys"] = dict(
             Device=spikegadgets,
             ElectrodeGroup=electrode_group,
-            Electrodes=[
-                dict(name="electrode_number",
-                     description="0-indexed channel within the probe. Channels 0-31 belong to shank 1 and channels 32-64"
-                                 " belong to shank 2"),
-                dict(name="group_name", description="Name of the electrode group this electrode is part of")
-            ]
+            # Electrodes=[
+            #     dict(name="electrode_number",
+            #          description="0-indexed channel within the probe. Channels 0-31 belong to shank 1 and channels 32-64"
+            #                      " belong to shank 2"),
+            #     dict(name="group_name", description="Name of the electrode group this electrode is part of")
+            # ]
         )
 
         return metadata
@@ -120,16 +128,6 @@ class SingerLabPreprocessingInterface(BaseDataInterface):
 
         recording_epochs = get_recording_epochs(filenames, self.source_data['vr_files'], subject_num, session_date)
         nwbfile.add_time_intervals(recording_epochs)
-
-        sg_rec_name = 'Y:\\singer\\Steph\\Code\\singer-lab-to-nwb\\data\\RawData\\UpdateTask\\S25_210913\\recording1_20210913_170611.rec'
-        add_electrical_series(recording=SpikeGadgetsRecordingExtractor(sg_rec_name, stream_id='trodes'), nwbfile=nwbfile)
-        # extract analog signals (continuous, stored as acquisition time series)
-        analog_obj = get_analog_timeseries(processed_data_folder, subject_num, session_date)
-        for analog_ts in analog_obj:
-            nwbfile.add_acquisition(analog_ts)
-
-        # extract digital signals (non-continuous, stored as behavioral events)
-        digital_signals = ['delay', 'trial', 'update']
 
         # load probe and channel details
         probe_file_path = Path(self.source_data['channel_map_path'])
