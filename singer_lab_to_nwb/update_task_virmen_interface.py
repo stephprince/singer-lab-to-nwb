@@ -80,8 +80,8 @@ class UpdateTaskVirmenInterface(BaseDataInterface):
             trial_ends = trial_ends[1:]
 
             # add all trials and corresponding info to nwb file
-            for t in range(len(trial_starts)):
-                nwbfile.add_trial(start_time=timestamps[trial_starts[t]], stop_time=timestamps[trial_ends[t]])
+            for start, end in zip(trial_starts, trial_ends):
+                nwbfile.add_trial(start_time=timestamps[start], stop_time=timestamps[end])
 
             # trial maze ids
             maze_names = ('linear', 'ymaze_short', 'ymaze_long', 'ymaze_delay')

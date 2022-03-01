@@ -10,12 +10,9 @@ from pynwb.device import Device
 from pynwb.ecephys import ElectrodeGroup, ElectricalSeries
 from pynwb.epoch import TimeIntervals
 from nwb_conversion_tools.basedatainterface import BaseDataInterface
-from nwb_conversion_tools.utils.json_schema import get_base_schema, get_schema_from_hdmf_class
-
-from mat_conversion_utils import convert_mat_file_to_dict
+from nwb_conversion_tools.utils.json_schema import get_base_schema
 from readTrodesExtractedDataFile3 import readTrodesExtractedDataFile
-from spikeinterface.extractors import SpikeGadgetsRecordingExtractor
-from nwb_conversion_tools.utils.spike_interface import add_electrical_series
+
 
 class SpikeGadgetsBinariesInterface(BaseDataInterface):
     """
@@ -42,7 +39,6 @@ class SpikeGadgetsBinariesInterface(BaseDataInterface):
 
         return metadata_schema
 
-
     def run_conversion(self, nwbfile: NWBFile, metadata: dict):
         """Primary conversion function for the custom Singer lab behavioral interface."""
         # get general session details
@@ -60,26 +56,15 @@ class SpikeGadgetsBinariesInterface(BaseDataInterface):
 
         # extract analog signals (continuous, stored as acquisition time series)
         analog_obj = get_analog_timeseries(raw_data_folder, nwbfile)
-
         for analog_ts in analog_obj.values():
             nwbfile.add_acquisition(analog_ts)
 
-        # extract digital signals (non-continuous, stored as behavioral events)
-        digital_signals = ['delay', 'trial', 'update']
+        # extract digital signals (non-continuous, stored as time intervals)
+        digital_obj = get_digital_events(raw_data_folder)
+        for digital_events in digital_obj.values():
+            nwbfile.add_time_intervals(digital_events)
 
-        # load probe and channel details
-        probe_file_path = Path(self.source_data['channel_map_path'])
-        df = pd.read_csv(probe_file_path)
-
-        # extract filtered lfp signals
-        signal_bands = ['eeg', 'theta', 'nontheta', 'ripple']
-        for br in brain_regions:
-            for ch in channels:
-                base_path = processed_data_folder / br / ch
-
-
-        # extract lfp event times
-        event_types
+        # extract raw signals  # TODO - decide if I want to save the raw data signals or not
 
 def get_analog_timeseries(data_folder, nwbfile):
     # define analog signals saved in data
@@ -106,7 +91,7 @@ def get_analog_timeseries(data_folder, nwbfile):
             full_signal.extend(analog_data['data'])
 
         # generate electrodes and electrode region
-        nwbfile.add_electrode(id=chan+128,  # TODO - fix hardcoding
+        nwbfile.add_electrode(id=chan + 128,  # TODO - fix hardcoding
                               x=np.nan, y=np.nan, z=np.nan,
                               imp=np.nan,
                               location='none',
@@ -118,14 +103,79 @@ def get_analog_timeseries(data_folder, nwbfile):
         analog_obj[name] = ElectricalSeries(name=name,
                                             data=H5DataIO(full_signal, compression='gzip'),
                                             starting_time=0.0,
-                                            rate=float(analog_data['clockrate']),   # should be the same across files so read from last
+                                            rate=float(analog_data['clockrate']),
+                                            # should be the same across files so read from last
                                             electrodes=elec_table_region,
-                                            description=analog_descript_dict[name],   # should be the same across files so read from last
+                                            description=analog_descript_dict[name],
+                                            # should be the same across files so read from last
                                             comments=f"Channel ID was {analog_data['id']}")
     return analog_obj
 
+
 def get_digital_events(data_folder):
-    digital_signals_chan_ID = [1, 2, 3, 4]  # TODO - have this as a project input
+    # define digital signals and channel dicts
     digital_signals = ['sync', 'trial', 'update', 'delay']
+    digital_signals_descript = ['synchronizing pulse sent from virmen software',  # TODO - check these definitions
+                                'indicates when trial is occurring vs inter trial interval',
+                                'indicates when the update cue is on or not',
+                                'indicates whether the delay cue is on or not']
+    digital_descript_dict = dict(zip(digital_signals, digital_signals_descript))
+    digital_signals_chan_ID = [1, 2, 3, 4]  # TODO - have this as a project input
+    digital_chan_dict = dict(zip(digital_signals, digital_signals_chan_ID))
 
+    # get recording durations from the files
+    recording_durations = get_recording_durations(data_folder)
 
+    # loop through signals and generate electrical series
+    digital_obj = dict.fromkeys(digital_signals)
+    for name, chan in digital_chan_dict.items():
+
+        # get event times from all files adjusted for time
+        digital_filenames = list(data_folder.glob(f'**/*.dio_ECU_Din{chan}.dat'))
+        all_on_times = []
+        all_off_times = []
+        duration = 0.0
+        for ind, file in enumerate(digital_filenames):  # TODO - only add recordings based on the ephys spreadsheet include/exclude info
+            # get periods where digital channel is ON
+            dio_data = readTrodesExtractedDataFile(file)
+            samp_rate = float(dio_data['clockrate'])
+            start_time = float(dio_data['first_timestamp']) / samp_rate
+            on_samples = [d[0] for d in dio_data['data'] if d[1] == 1]
+            off_samples = [d[0] for d in dio_data['data'] if d[1] == 0]
+
+            # clean up times for start and end of file
+            if dio_data['data'][0][1] == 0:  # if first value is off, remove first off sample
+                off_samples = off_samples[1:]
+            elif dio_data['data'][0][1] == 1:  # if first value is on, remove first on + off sample bc we don't know actual start time
+                on_samples = on_samples[1:]
+                off_samples = off_samples[1:]
+
+            if dio_data['data'][-1][1] == 1:  # if last value is on, remove last on sample bc we don't know actual end time
+                on_samples = on_samples[:-1]
+
+            # convert to seconds from start time, adjusted for duration
+            on_times = (np.array(on_samples) / samp_rate) - start_time # in seconds
+            off_times = np.array(off_samples) / samp_rate - start_time# in seconds
+
+            # append to list and adjust for duration
+            all_on_times.extend(on_times + sum(recording_durations[:ind]))  # adjust for durations up to that point
+            all_off_times.extend(off_times + sum(recording_durations[:ind]))  # adjust for durations up to that point
+
+        # make time intervals structure for each signal
+        digital_obj[name] = TimeIntervals(name=name, description=digital_descript_dict[name])
+
+        assert(len(all_on_times) == len(all_off_times))
+        for start, stop in zip(all_on_times, all_off_times):
+            digital_obj[name].add_row(start_time=start, stop_time=stop)
+
+    return digital_obj
+
+def get_recording_durations(data_folder):
+    raw_filenames = list(data_folder.glob(f'**/*.raw_nt1ch1.dat'))
+    durations = []
+    for file in raw_filenames:
+        raw_data = readTrodesExtractedDataFile(file)
+        dur = len(raw_data['data']) / int(raw_data['clockrate'])  # duration in seconds
+        durations.append(dur)
+
+    return durations
