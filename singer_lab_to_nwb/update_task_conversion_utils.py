@@ -19,7 +19,7 @@ def get_file_paths(session_id, rec_id):
     kilosort_path_PFC = processed_ephys_path / "PFC" / "sorted" / "kilosort"
     #cell_explorer_path = kilosort_path_CA1 / f"{session_id}_CA1.spikes.cellinfo.mat"
     #probe_path = base_path / "ProbeData" / "update-task-64-chan-dual-probes.prb"
-    channel_map_path = base_path / "ProbeData" / "A2x32-Poly5-10mm-20s-200-100-probemap.csv"
+    channel_map_path = base_path / "ProbeData" / "A2x32-Poly5-10mm-20s-200-100-RigC-ProbeMap.csv"
     nwbfile_path = str(base_path / "NWBFile" / f"{session_id}.nwb")
 
     return dict(raw_ephys=raw_ephys_path,

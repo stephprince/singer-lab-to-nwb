@@ -91,9 +91,11 @@ def get_analog_timeseries(data_folder, nwbfile):
             full_signal.extend(analog_data['data'])
 
         # generate electrodes and electrode region
-        nwbfile.add_electrode(id=chan + 128,  # TODO - fix hardcoding
+        nwbfile.add_electrode(id=chan + 128, # TODO - fix hardcoding
                               x=np.nan, y=np.nan, z=np.nan,
+                              rel_x=np.nan, rel_y=np.nan, rel_z=np.nan,
                               imp=np.nan,
+                              reference='none',
                               location='none',
                               filtering='none',
                               group=nwbfile.electrode_groups['analog_inputs'])
