@@ -7,13 +7,13 @@ from hdmf.backends.hdf5.h5_utils import H5DataIO
 
 from pynwb import NWBFile
 from pynwb.device import Device
-from pynwb.ecephys import ElectrodeGroup
+from pynwb.ecephys import ElectrodeGroup, ElectricalSeries
 from pynwb.epoch import TimeIntervals
 from nwb_conversion_tools.basedatainterface import BaseDataInterface
 from nwb_conversion_tools.utils.json_schema import get_base_schema, get_schema_from_hdmf_class
 
-from mat_conversion_utils import convert_mat_file_to_dict
-from readTrodesExtractedDataFile3 import readTrodesExtractedDataFile
+from mat_conversion_utils import convert_singer_mat_to_scipy_obj
+from iterative_data_write_utils import MultiFileArrayIterator
 
 class SingerLabPreprocessingInterface(BaseDataInterface):
     """
@@ -73,8 +73,7 @@ class SingerLabPreprocessingInterface(BaseDataInterface):
 
         # add ecephys info
         brain_regions = self.source_data['brain_regions']
-        brain_region_groups = [br for br in brain_regions for _ in range(2)]  # double list so region for each shank
-        channel_groups = range(len(brain_region_groups))
+        channel_groups = range(len(brain_regions))
 
         spikegadgets = [dict(
             name="spikegadgets_mcu",
@@ -88,9 +87,10 @@ class SingerLabPreprocessingInterface(BaseDataInterface):
         ]
 
         electrode_group = [dict(
-            name=f'shank{n + 1}',
-            description=f'shank{n + 1} of NeuroNexus probes. Shanks 1-2 belong to probe 1, Shanks 3-4 belong to probe 2',
-            location=brain_region_groups[n],
+            name=f'probe{n + 1}',
+            description=f'probe{n + 1} of NeuroNexus probes.  Channels 0-31 belong to shank 1 and channels 32-64 '
+                        f'belong to shank 2',
+            location=brain_regions[n],
             device='spikegadgets_mcu')
             for n, _ in enumerate(channel_groups)
         ]
@@ -131,18 +131,83 @@ class SingerLabPreprocessingInterface(BaseDataInterface):
 
         # load probe and channel details
         probe_file_path = Path(self.source_data['channel_map_path'])
-        df = pd.read_csv(probe_file_path)
+        probe_map = pd.read_csv(probe_file_path)
+
+        # add electrodes for probe channels
+        num_electrodes = 0
+        device = nwbfile.create_device(name=metadata['Ecephys']['Device'][0]['name'])  # TODO - search for MCU device
+        for group in metadata['Ecephys']['ElectrodeGroup']:
+            if group['name'] is not 'analog_inputs':
+                nwbfile.create_electrode_group(name=group['name'],
+                                               description=group['description'],
+                                               location=group['location'],
+                                               device=device)
+
+                # generate electrodes and electrode region
+                for index, row in probe_map.iterrows():
+                    nwbfile.add_electrode(id=index + num_electrodes,
+                                          x=np.nan, y=np.nan, z=np.nan,
+                                          rel_x=row['X'], rel_y=row['Y'], rel_z=row['K'],
+                                          reference='ground pellet',
+                                          imp=np.nan,
+                                          location=group['location'],
+                                          filtering='none',
+                                          group=nwbfile.electrode_groups[group['name']])
+
+                num_electrodes = index + 1  # add 1 so that next loop creates new unique index
 
         # extract filtered lfp signals
         signal_bands = ['eeg', 'theta', 'nontheta', 'ripple']
         for br in brain_regions:
-            for ch in channels:
-                base_path = processed_data_folder / br / ch
+            for band in signal_bands:
 
+                channel_dirs = []
+                for ntrode, row in probe_map.iterrows():
+                    channel = row['HW Channel']
+                    channel_dirs.append(processed_data_folder / br / str(int(channel)))
+                elec_table_region = nwbfile.create_electrode_table_region(region=list(range(0, 64)),
+                                                                          description=f'channels in {br}')
+                # get metadata from file
+                filenames = list(channel_dirs[0].glob(f'{band}?.mat'))  # TODO - get recs from spreadsheet
+                recs = [f.stem.strip(band) for f in filenames]
+                temp_data = convert_singer_mat_to_scipy_obj(filenames[0], subject_num, session_date, recs[0])
+                samp_rate = temp_data.samprate
+                filter = temp_data.filteringinfo
+                num_steps = int(max(recording_epochs['stop_time'][:])*samp_rate)
+                assert (temp_data.region == br)
+
+                # create data iterator
+                data = MultiFileArrayIterator(channel_dirs, band, subject_num, session_date, recs, num_steps)
+
+                # # load up all data from each channel, organized by nTrodeID
+                # for ch, row in probe_map.iterrows():
+                #     channel = row['HW Channel']
+                #     base_path = processed_data_folder / br / str(int(channel))
+                #     recording_files = list(base_path.glob(f'{band}?.mat'))
+                #
+                #     chan_data = []
+                #     for ind, file in enumerate(recording_files):
+                #         temp_data = convert_singer_mat_to_scipy_obj(file, subject_num, session_date, ind)
+                #         chan_data.extend(temp_data.data)
+                #
+
+                # general electrical series objects
+                ephys_ts = ElectricalSeries(name='ecephys',
+                                                    data=H5DataIO(data, compression='gzip'),
+                                                    starting_time=0.0,
+                                                    rate=float(samp_rate),
+                                                    electrodes=elec_table_region,
+                                                    description='local field potential data cleaned by singer lab preprocessing pipeline')
+                nwbfile.add_acquisition(ephys_ts)
+
+                # test saving
+                from pynwb import NWBHDF5IO
+                test_filename = Path("Y:\\singer\\Steph\\Code\\singer-lab-to-nwb\\data\\NWBFile\\test.nwb")
+                io = NWBHDF5IO(str(test_filename), 'w')
+                io.write(nwbfile)
+                io.close()
 
         # extract lfp event times
-        event_types
-
 
 
 def get_recording_epochs(filenames, vr_files, subject_num, session_date):
@@ -203,14 +268,5 @@ def get_analog_timeseries(data_folder, subject_num, session_date):
                                            description=descript)
     return analog_obj
 
-def convert_singer_mat_to_scipy_obj(filename, subject_num, session_date, rec_num):
-    # load matlab file
-    matin = convert_mat_file_to_dict(filename)
 
-    try:  # catch for first file vs subsequent ones
-        mat_obj = matin['eeg'][int(subject_num) - 1][int(session_date) - 1][rec_num]  # subtract 1 because 0-based indexing
-    except TypeError:
-        mat_obj = matin['eeg'][int(subject_num) - 1][int(session_date) - 1]
-
-    return mat_obj
 

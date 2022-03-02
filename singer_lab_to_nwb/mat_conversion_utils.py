@@ -102,3 +102,14 @@ def flatten_nested_dict(nested_dict):
             flatten_dict[k] = v
 
     return flatten_dict
+
+def convert_singer_mat_to_scipy_obj(filename, subject_num, session_date, rec_num):
+    # load matlab file
+    matin = convert_mat_file_to_dict(filename)
+
+    try:  # catch for first file vs subsequent ones
+        mat_obj = matin['eeg'][int(subject_num) - 1][int(session_date) - 1][rec_num]  # subtract 1 because 0-based indexing
+    except TypeError:
+        mat_obj = matin['eeg'][int(subject_num) - 1][int(session_date) - 1]
+
+    return mat_obj
