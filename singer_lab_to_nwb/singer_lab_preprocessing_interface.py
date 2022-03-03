@@ -7,13 +7,14 @@ from hdmf.backends.hdf5.h5_utils import H5DataIO
 
 from pynwb import NWBFile
 from pynwb.device import Device
-from pynwb.ecephys import ElectrodeGroup, ElectricalSeries
+from pynwb.ecephys import ElectrodeGroup, ElectricalSeries, LFP, FilteredEphys
 from pynwb.epoch import TimeIntervals
 from nwb_conversion_tools.basedatainterface import BaseDataInterface
 from nwb_conversion_tools.utils.json_schema import get_base_schema, get_schema_from_hdmf_class
 
-from mat_conversion_utils import convert_singer_mat_to_scipy_obj
-from iterative_data_write_utils import MultiFileArrayIterator
+from multi_file_array_iterator import MultiFileArrayIterator
+from singer_lab_mat_loader import SingerLabMatLoader
+from update_task_conversion_utils import check_module
 
 class SingerLabPreprocessingInterface(BaseDataInterface):
     """
@@ -121,19 +122,18 @@ class SingerLabPreprocessingInterface(BaseDataInterface):
         subject_num = metadata['Subject']['subject_id'][1:]
         session_date = processed_data_folder.stem.split(f'{subject_num}_')[1]
         brain_regions = np.unique([e['location'] for e in metadata['Ecephys']['ElectrodeGroup']])
+        mat_loader = SingerLabMatLoader(subject_num, session_date)
 
         # extract recording times to epochs, same for both brain regions
         base_path = processed_data_folder / brain_regions[0]
         filenames = glob.glob(str(base_path) + '/0/eeg*.mat')  # use eeg files bc most consistent name across singer lab
 
-        recording_epochs = get_recording_epochs(filenames, self.source_data['vr_files'], subject_num, session_date)
+        recording_epochs = get_recording_epochs(filenames, self.source_data['vr_files'], mat_loader)
         nwbfile.add_time_intervals(recording_epochs)
 
-        # load probe and channel details
+        # load probe and channel details and use to add electrodes
         probe_file_path = Path(self.source_data['channel_map_path'])
         probe_map = pd.read_csv(probe_file_path)
-
-        # add electrodes for probe channels
         num_electrodes = 0
         device = nwbfile.create_device(name=metadata['Ecephys']['Device'][0]['name'])  # TODO - search for MCU device
         for group in metadata['Ecephys']['ElectrodeGroup']:
@@ -156,61 +156,79 @@ class SingerLabPreprocessingInterface(BaseDataInterface):
 
                 num_electrodes = index + 1  # add 1 so that next loop creates new unique index
 
-        # extract filtered lfp signals
-        signal_bands = ['eeg', 'theta', 'nontheta', 'ripple']
-        for br in brain_regions:
-            for band in signal_bands:
+        # extract best ripple channel
 
+
+        # extract filtered lfp signals
+        signal_bands = ['eeg', 'EEG/beta', 'EEG/delta', 'EEG/theta', 'EEG/lowgamma', 'EEG/ripple']
+        elec_regions = [0, 64, 128]
+        for ind, br in enumerate(brain_regions):
+            for band in signal_bands:
+                # get channel directory list ordered by depth
                 channel_dirs = []
                 for ntrode, row in probe_map.iterrows():
                     channel = row['HW Channel']
                     channel_dirs.append(processed_data_folder / br / str(int(channel)))
-                elec_table_region = nwbfile.create_electrode_table_region(region=list(range(0, 64)),
+
+                elec_table_region = nwbfile.create_electrode_table_region(region=list(range(elec_regions[ind], elec_regions[ind+1])),
                                                                           description=f'channels in {br}')
-                # get metadata from file
+
+                # get metadata from first file (should be same for all)
                 filenames = list(channel_dirs[0].glob(f'{band}?.mat'))  # TODO - get recs from spreadsheet
                 recs = [f.stem.strip(band) for f in filenames]
-                temp_data = convert_singer_mat_to_scipy_obj(filenames[0], subject_num, session_date, recs[0])
+                temp_data = mat_loader.run_conversion(filenames[0], recs[0], 'scipy')
                 samp_rate = temp_data.samprate
-                filter = temp_data.filteringinfo
-                num_steps = int(max(recording_epochs['stop_time'][:])*samp_rate)
-                assert (temp_data.region == br)
+                #filter = ''.join(temp_data.filteringinfo)
+                #assert (temp_data.region == br)
+
+                temp_data = mat_loader.run_conversion(filenames, recs, 'concat_array')
+                data_array = np.array(temp_data)
+                # TODO figure out the best way to extract the different data components of the filtered data
 
                 # create data iterator
-                data = MultiFileArrayIterator(channel_dirs, band, subject_num, session_date, recs, num_steps)
+                num_steps = int(max(recording_epochs['stop_time'][:]) * samp_rate)
+                data = MultiFileArrayIterator(channel_dirs, band, mat_loader, recs, num_steps)
 
-                # # load up all data from each channel, organized by nTrodeID
-                # for ch, row in probe_map.iterrows():
-                #     channel = row['HW Channel']
-                #     base_path = processed_data_folder / br / str(int(channel))
-                #     recording_files = list(base_path.glob(f'{band}?.mat'))
-                #
-                #     chan_data = []
-                #     for ind, file in enumerate(recording_files):
-                #         temp_data = convert_singer_mat_to_scipy_obj(file, subject_num, session_date, ind)
-                #         chan_data.extend(temp_data.data)
-                #
+                # general data interfaces as either as LFP or filtered ephys objects
+                check_module(nwbfile, 'ecephys', 'contains processed extracellular electrophysiology data')
+                if band == 'eeg':
+                    band_name = f'lfp_{br}'
+                    descript = 'local field potential data generated by singer lab preprocessing pipeline'
+                    data_obj = LFP(name=band_name)
+                else:
+                    band = f'{band.strip("EEG/")}_{br}'
+                    descript = 'filtered ephys data generated by singer lab preprocessing pipeline'
+                    data_obj = FilteredEphys(name=band_name)
 
-                # general electrical series objects
-                ephys_ts = ElectricalSeries(name='ecephys',
-                                                    data=H5DataIO(data, compression='gzip'),
-                                                    starting_time=0.0,
-                                                    rate=float(samp_rate),
-                                                    electrodes=elec_table_region,
-                                                    description='local field potential data cleaned by singer lab preprocessing pipeline')
-                nwbfile.add_acquisition(ephys_ts)
+                # add electrical series to NWB file
+                ecephys_ts = ElectricalSeries(name=band_name,
+                                              data=H5DataIO(data, compression='gzip'),
+                                              starting_time=0.0,
+                                              #filtering=filter,
+                                              rate=float(samp_rate),
+                                              electrodes=elec_table_region,
+                                              description=descript)
+                data_obj.add_electrical_series(ecephys_ts)
+                nwbfile.processing['ecephys'].add(data_obj)
 
-                # test saving
-                from pynwb import NWBHDF5IO
-                test_filename = Path("Y:\\singer\\Steph\\Code\\singer-lab-to-nwb\\data\\NWBFile\\test.nwb")
-                io = NWBHDF5IO(str(test_filename), 'w')
-                io.write(nwbfile)
-                io.close()
+        # extract lfp event times from best ripple channel
+        signal_bands = ['thetas', 'nonthetas', 'ripples']
+        for ind, br in enumerate(brain_regions):
+            for band in signal_bands:
+                filenames = list(channel_dirs[0].glob(f'{band}?.mat'))  # TODO - get recs from spreadsheet
+                mat_loader = SingerLabMatLoader(filenames[0], subject_num, session_date, recs[0])
+                temp_data = mat_loader.run_conversion('scipy')
 
-        # extract lfp event times
+                lfp_events = TimeIntervals(name='band',
+                                             description='')
 
+                lfp_events.add_column(name="behavior_task",
+                                      description="indicates whether VR task was displayed on the screen (1), or if the"
+                                                  " screen was left covered/blank as a baseline period (0)")
+                # add events to nwb file
+                nwbfile.processing['ecephys'].add(data_obj)
 
-def get_recording_epochs(filenames, vr_files, subject_num, session_date):
+def get_recording_epochs(filenames, vr_files, mat_loader):
     # make time intervals structure
     recording_epochs = TimeIntervals(
         name="recording_epochs",
@@ -227,7 +245,8 @@ def get_recording_epochs(filenames, vr_files, subject_num, session_date):
     start_time = 0.0  # initialize start time to 0 sec
     for ind, f in enumerate(filenames):
         # load singer mat structure
-        eeg_mat = convert_singer_mat_to_scipy_obj(f, subject_num, session_date, ind)
+        rec = f.split('.mat')[0][-1]
+        eeg_mat = mat_loader.run_conversion(f, rec, 'scipy')
 
         # add to nwb file
         duration = (len(eeg_mat.time) / eeg_mat.samprate)  # in seconds
@@ -236,37 +255,4 @@ def get_recording_epochs(filenames, vr_files, subject_num, session_date):
         start_time = start_time + duration
 
     return recording_epochs
-
-def get_analog_timeseries(data_folder, subject_num, session_date):
-    # define analog signals saved in data
-    analog_signals = ['licks', 'rotVelocity', 'transVelocity']
-    analog_signals_descript = ['signal from photointerrupter circuit, values of 5V indicate the mouse tongue is has '
-                               'broken through the laser beam, values of 0V indicate baseline',
-                               'movement of the spherical treadmill along the roll axis as measured by an optical'
-                               'gaming mouse and filtered through a lab view function, maximum values of -10 and 10V',
-                               'movement of the spherical treadmill along the pitch axis as measured by an optical'
-                               'gaming mouse and filtered through a lab view function, maximum values of -10 and 10V']
-
-    # look through signals and generate electrical series
-    analog_dict = dict(zip(analog_signals, analog_signals_descript))
-    for name, descript in analog_dict.items():
-        # append the electrical series across recording files
-        filenames = glob.glob(str(data_folder) + f'/{name}*.mat')
-        for ind, f in enumerate(filenames):
-            # load singer lab mat structure
-            analog_obj = convert_singer_mat_to_scipy_obj(f, subject_num, session_date, ind)
-
-            # append series data
-            full_series[name].append(analog_obj.data)
-            rate[name] = analog_obj.sampling_rate
-
-        # general electrical series objects
-        analog_obj[name] = ElectricalSeries(name=name,
-                                           data=H5DataIO(full_series[name], compression='gzip'),
-                                           starting_time=0,
-                                           rate=rate[name],
-                                           description=descript)
-    return analog_obj
-
-
 
