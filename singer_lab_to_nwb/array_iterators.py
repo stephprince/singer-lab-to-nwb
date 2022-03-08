@@ -67,13 +67,13 @@ class MultiDimMultiFileArrayIterator(MultiFileArrayIterator):
         :param num_steps: Number of timesteps per channel
         :return:
         """
-        self.shape = (num_samples, len(channel_dirs), len(filenames))
+        self.shape = (num_samples, len(channel_dirs), len(dim_names))
         self.channel_dirs = channel_dirs
         self.dim_names = dim_names
         self.mat_loader = mat_loader
         self.recs = recs
         self.metric_row = metric_row  # which row to use (e.g. phase, amplitude, or envelope)
-        self.num_chunks = len(channel_dirs)*len(filenames)
+        self.num_chunks = len(channel_dirs)*len(dim_names)
         self.__curr_chunk = 0
 
     def __next__(self):
