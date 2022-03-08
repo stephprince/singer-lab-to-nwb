@@ -1,7 +1,7 @@
 """Authors: Ben Dichter, Cody Baker."""
 import mat73
 import numpy as np
-from datetime import datetime
+from datetime import timedelta, datetime
 from scipy.io import loadmat, matlab
 from collections import Iterable
 
@@ -102,3 +102,9 @@ def flatten_nested_dict(nested_dict):
             flatten_dict[k] = v
 
     return flatten_dict
+
+def matlab_time_to_datetime(series):
+    times = datetime.fromordinal(int(series)) + \
+            timedelta(days=series % 1) - \
+            timedelta(days=366)
+    return times
