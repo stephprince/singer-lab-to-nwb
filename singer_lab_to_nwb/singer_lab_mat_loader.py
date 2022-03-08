@@ -1,6 +1,6 @@
-
 from mat_conversion_utils import convert_mat_file_to_dict
 from pathlib import Path
+
 
 class SingerLabMatLoader:
 
