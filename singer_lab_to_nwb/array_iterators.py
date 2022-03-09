@@ -2,6 +2,7 @@ import numpy as np
 
 from hdmf.data_utils import AbstractDataChunkIterator, DataChunk  # noqa: F811
 
+
 class MultiFileArrayIterator(AbstractDataChunkIterator):
 
     def __init__(self, channel_dirs, filename, mat_loader, recs, num_steps, ):
@@ -80,12 +81,13 @@ class MultiDimMultiFileArrayIterator(MultiFileArrayIterator):
         """
         Return in each iteration the data from a single file
         """
-        if self.__curr_chunk < len(self.num_chunks):
+        if self.__curr_chunk < self.num_chunks:
             # find which dimension we're currently iterating through and get relevant filenames
-            dim = np.ceil(self.__curr_chunk/len(channel_dirs))  # e.g., less than 64 chunks -> dim 0
+            dim = int(np.floor(self.__curr_chunk/len(self.channel_dirs)))  # e.g., less than 64 chunks -> dim 0
+            ch = self.__curr_chunk - dim*len(self.channel_dirs)
             filenames = []
-            for r in self.recs:  # TODO - see if faster to establish chunks as separate files or extend here
-                filenames.append(self.channel_dirs[self.__curr_index] / f'{self.dim_names[dim]}{r}.mat')
+            for r in self.recs:
+                filenames.append(self.channel_dirs[ch] / f'{self.dim_names[dim]}{r}.mat')
 
             # load and concatenate data across recording files
             temp_data = self.mat_loader.run_conversion(filenames, self.recs, 'concat_array')
@@ -93,7 +95,7 @@ class MultiDimMultiFileArrayIterator(MultiFileArrayIterator):
 
             # create data chunk
             self.__curr_chunk += 1
-            return DataChunk(data=np.array(curr_data),
+            return DataChunk(data=np.squeeze(curr_data),
                              selection=np.s_[:, ch, dim])
         else:
             raise StopIteration
