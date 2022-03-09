@@ -61,7 +61,7 @@ class UpdateTaskVirmenInterface(BaseDataInterface):
             behavior_epochs.add_row(start_time=ts.values[0], stop_time=ts.values[-1])
 
         check_module(nwbfile, 'behavior', 'contains processed behavioral data')
-        nwbfile.processing['behavior'].add(behavior_epochs)
+        nwbfile.add_time_intervals(behavior_epochs)
 
         # create behavioral time series objects and add to processing module
         time, pos_obj, trans_vel_obj, rot_vel_obj, view_angle_obj = create_behavioral_time_series(virmen_df, timestamps)

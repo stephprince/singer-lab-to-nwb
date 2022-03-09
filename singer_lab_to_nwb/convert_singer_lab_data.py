@@ -1,6 +1,6 @@
-from pathlib import Path
 from singer_lab_nwb_converter import SingerLabNWBConverter
-from update_task_conversion_utils import get_file_paths, update_phy_unit_ids
+from update_task_conversion_utils import get_file_paths
+from phy_conversion_utils import update_phy_unit_ids
 
 # get file paths for conversion
 session_id = "S25_210913"
@@ -13,7 +13,9 @@ file_paths = get_file_paths(session_id, rec_id)
 stub_test = True
 
 source_data = dict(
-    VirmenData=dict(file_path=str(file_paths["virmen"])),
+    VirmenData=dict(file_path=str(file_paths["virmen"]),
+                    session_id=session_id,
+                    synced_file_path=str(file_paths["processed_ephys"])),
     SpikeGadgetsData=dict(raw_data_folder=str(file_paths['raw_ephys']),
                           brain_regions=brain_regions),
     PreprocessedData=dict(processed_data_folder=str(file_paths["processed_ephys"]),
@@ -32,7 +34,7 @@ conversion_options = dict(
 )
 
 # remake kilosort files to update unit ids
-if 'PhySortingCA1' in source_data.keys(): # TODO - make this more generalizable for any phy sorting/number of regions
+if 'PhySortingCA1' in source_data.keys():  # TODO - make this more generalizable for any phy sorting/number of regions
     update_phy_unit_ids(source_data)
 
 # run the conversion process
