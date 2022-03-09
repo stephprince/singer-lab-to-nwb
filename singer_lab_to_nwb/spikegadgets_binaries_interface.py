@@ -55,9 +55,9 @@ class SpikeGadgetsBinariesInterface(BaseDataInterface):
                                        device=device)
 
         # extract analog signals (continuous, stored as acquisition time series)
-        analog_obj = get_analog_timeseries(raw_data_folder, nwbfile)
-        for analog_ts in analog_obj.values():
-            nwbfile.add_acquisition(analog_ts)
+        # analog_obj = get_analog_timeseries(raw_data_folder, nwbfile)
+        # for analog_ts in analog_obj.values():
+        #     nwbfile.add_acquisition(analog_ts)
 
         # extract digital signals (non-continuous, stored as time intervals)
         digital_obj = get_digital_events(raw_data_folder)
@@ -88,10 +88,10 @@ def get_analog_timeseries(data_folder, nwbfile):
         full_signal = []
         for file in analog_filenames:  # TODO - only add recordings based on the ephys spreadsheet include/exclude info
             analog_data = readTrodesExtractedDataFile(file)
-            full_signal.extend(analog_data['data'])
+            full_signal.extend(np.asarray(analog_data['data']))
 
         # generate electrodes and electrode region
-        nwbfile.add_electrode(id=chan + 128, # TODO - fix hardcoding
+        nwbfile.add_electrode(id=chan + 128,  # TODO - fix hardcoding
                               x=np.nan, y=np.nan, z=np.nan,
                               rel_x=np.nan, rel_y=np.nan, rel_z=np.nan,
                               imp=np.nan,
@@ -117,10 +117,10 @@ def get_analog_timeseries(data_folder, nwbfile):
 def get_digital_events(data_folder):
     # define digital signals and channel dicts
     digital_signals = ['sync', 'trial', 'update', 'delay']
-    digital_signals_descript = ['synchronizing pulse sent from virmen software',  # TODO - check these definitions
-                                'indicates when trial is occurring vs inter trial interval',
-                                'indicates when the update cue is on or not',
-                                'indicates whether the delay cue is on or not']
+    digital_signals_descript = ['synchronizing pulse sent from virmen software, from spikegadgets digital signals',  # TODO - check these definitions
+                                'indicates when trial is occurring vs inter trial, from spikegadgets digital signals',
+                                'indicates when the update cue is on or not, from spikegadgets digital signals',
+                                'indicates whether the delay cue is on or not, from spikegadgets digital signals']
     digital_descript_dict = dict(zip(digital_signals, digital_signals_descript))
     digital_signals_chan_ID = [1, 2, 3, 4]  # TODO - have this as a project input
     digital_chan_dict = dict(zip(digital_signals, digital_signals_chan_ID))
