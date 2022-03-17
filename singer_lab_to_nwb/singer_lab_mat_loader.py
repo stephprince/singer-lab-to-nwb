@@ -23,6 +23,8 @@ class SingerLabMatLoader:
             data = self.convert_recs_to_array_obj()
         elif output_type == 'array':
             data = self.convert_to_array_obj()
+        elif output_type == 'dict':
+            data = self.convert_to_dict_obj()
 
         return data
 
@@ -55,3 +57,12 @@ class SingerLabMatLoader:
         array_obj = mat_obj.data
 
         return array_obj
+
+    def convert_to_dict_obj(self):
+        # load matlab file
+        matin = convert_mat_file_to_dict(str(self.filenames[0]))
+
+        key = [k for k in matin.keys() if not k.startswith('__')]
+        dict_obj = matin[key[0]]
+
+        return dict_obj
