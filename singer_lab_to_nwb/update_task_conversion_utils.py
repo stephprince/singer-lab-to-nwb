@@ -1,6 +1,6 @@
 from pathlib import Path
 
-def get_file_paths(session_id, rec_id):
+def get_file_paths(session_id):
     """
     sets default file paths for different data types
     """

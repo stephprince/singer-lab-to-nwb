@@ -29,7 +29,7 @@ class MultiFileArrayIterator(AbstractDataChunkIterator):
         if self.__curr_index < len(self.channel_dirs):
             # get list of filenames to use
             filenames = []
-            for r in self.recs:  # TODO - see if faster to establish chunks as separate files or extend here
+            for r in self.recs:
                 filenames.append(self.channel_dirs[self.__curr_index] / f'{self.filename}{r}.mat')
 
             # load and concatenate data across recording files

@@ -4,21 +4,19 @@ from phy_conversion_utils import update_phy_unit_ids
 
 # get file paths for conversion
 session_id = "S25_210913"
-rec_id = "1"
 brain_regions = ['CA1', 'PFC']
 vr_files = [1, 0, 1]
-file_paths = get_file_paths(session_id, rec_id)
+file_paths = get_file_paths(session_id)
 
 # run conversion processes
-stub_test = True
+stub_test = False
 
 source_data = dict(
     VirmenData=dict(file_path=str(file_paths["virmen"]),
                     session_id=session_id,
                     synced_file_path=str(file_paths["processed_ephys"])),
-    SpikeGadgetsData=dict(raw_data_folder=str(file_paths['raw_ephys']),
-                          brain_regions=brain_regions),
     PreprocessedData=dict(processed_data_folder=str(file_paths["processed_ephys"]),
+                          raw_data_folder=str(file_paths['raw_ephys']),
                           channel_map_path=str(file_paths["channel_map"]),
                           brain_regions=brain_regions,
                           vr_files=vr_files),
@@ -34,7 +32,8 @@ conversion_options = dict(
 )
 
 # remake kilosort files to update unit ids
-if 'PhySortingCA1' in source_data.keys():  # TODO - make this more generalizable for any phy sorting/number of regions
+phy_files = [key for key in source_data.keys() if 'PhySorting' in key]
+if len(phy_files) > 1:  # TODO - make this more generalizable for any phy sorting/number of regions
     update_phy_unit_ids(source_data)
 
 # run the conversion process

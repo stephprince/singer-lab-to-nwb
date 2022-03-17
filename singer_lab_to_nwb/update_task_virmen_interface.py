@@ -158,10 +158,6 @@ class UpdateTaskVirmenInterface(BaseDataInterface):
                                  data=loc_delays2)
 
     def load_virmen_data(self):
-        # TODO - load virmen file from processed data folder to get syncing
-        # TODO - add time intervals indicating no VR displayed vs VR displayed
-        # TODO - convert rest of virmen synced data to csv so that I can use the table headers
-
         virmen_df_list = []
         if self.source_data['synced_file_path']:  # if there exists ephys data, use that
             base_path = Path(self.source_data['synced_file_path'])

@@ -19,8 +19,7 @@ def get_number_of_units(phy_folder):
     return len(np.unique(spike_clusters))
 
 def remap_unit_ids(phy_folder, start_id=0):
-    # TODO - remap the channel numbers for the electrodes as well??
-    # make output path name
+    # make output path name  # TODO - change channel numbers to match first 64 and second 64
     phy_folder = Path(phy_folder)
     phy_folder_new = phy_folder / 'new_unit_ids'
     Path(phy_folder_new).mkdir(exist_ok=True)
@@ -38,7 +37,7 @@ def remap_unit_ids(phy_folder, start_id=0):
         spike_clusters_new[spike_clusters == key] = value
     np.save((phy_folder_new / 'spike_clusters.npy'), spike_clusters_new)
 
-    # copy spike times to new file # TODO: figure out which of these I can just copy later
+    # copy spike times to new file
     shutil.copyfile((phy_folder / 'spike_times.npy'), (phy_folder_new / 'spike_times.npy'))
     shutil.copyfile((phy_folder / 'spike_templates.npy'), (phy_folder_new / 'spike_templates.npy'))
     shutil.copyfile((phy_folder / 'params.py'), (phy_folder_new / 'params.py'))
