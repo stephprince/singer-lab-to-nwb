@@ -7,7 +7,6 @@ from datetime import datetime, timedelta
 
 from update_task_virmen_interface import UpdateTaskVirmenInterface
 from singer_lab_preprocessing_interface import SingerLabPreprocessingInterface
-from spikegadgets_binaries_interface import SpikeGadgetsBinariesInterface
 from mat_conversion_utils import convert_mat_file_to_dict
 
 
@@ -18,7 +17,6 @@ class SingerLabNWBConverter(NWBConverter):
 
     data_interface_classes = dict(
         VirmenData=UpdateTaskVirmenInterface,
-        SpikeGadgetsData=SpikeGadgetsBinariesInterface,
         PreprocessedData=SingerLabPreprocessingInterface,
         PhySortingCA1=PhySortingInterface,
         PhySortingPFC=PhySortingInterface,
@@ -52,9 +50,9 @@ class SingerLabNWBConverter(NWBConverter):
         )
 
         # get session start time
-        if self.data_interface_objects['SpikeGadgetsData']:  # if there exists ephys data, use that
+        if self.data_interface_objects['PreprocessedData']:  # if there exists ephys data, use that
             # load ephys timestamps file
-            raw_ephys_folder = Path(self.data_interface_objects['SpikeGadgetsData'].source_data['raw_data_folder'])
+            raw_ephys_folder = Path(self.data_interface_objects['PreprocessedData'].source_data['raw_data_folder'])
             timestamps_filename = list(raw_ephys_folder.glob(f'*.raw/*.timestamps.dat'))
             time_data = readTrodesExtractedDataFile(timestamps_filename[0])  # TODO - get first file from recording
 
@@ -76,8 +74,9 @@ class SingerLabNWBConverter(NWBConverter):
             session_description="Head-fixed mice performed update task in virtual reality",
             session_start_time=str(session_start_time),
         )
+        # TODO - add tag for which git version this file was generated with
 
-        # add spike sorting column info
+        # add spike sorting column info  # TODO - add fields that we want to save info for from phy
         sorted_path = Path(self.data_interface_objects['PhySortingCA1'].source_data['folder_path'])
         if sorted_path:
             metadata["Ecephys"]["UnitProperties"] = [dict(name='Amplitude', description='amplitude imported from phy'),
