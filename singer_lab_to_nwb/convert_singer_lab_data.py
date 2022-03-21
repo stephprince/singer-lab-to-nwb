@@ -1,47 +1,41 @@
 from singer_lab_nwb_converter import SingerLabNWBConverter
-from update_task_conversion_utils import get_file_paths
-from phy_conversion_utils import update_phy_unit_ids
+from update_task_conversion_utils import get_file_paths, get_session_info
 
-# get file paths for conversion
-session_id = "S25_210913"
-brain_regions = ['CA1', 'PFC']
-vr_files = [1, 0, 1]
-file_paths = get_file_paths(session_id)
+# set inputs
+animals = [17, 20, 25, 28, 29]
+dates_included = [210913]
+dates_excluded = []
 
-# run conversion processes
-stub_test = False
+# load session info
+spreadsheet_filename = 'Y:/singer/Steph/Code/update-project/docs/metadata-summaries/VRUpdateTaskEphysSummary.csv'
+all_session_info = get_session_info(filename=spreadsheet_filename, animals=animals,
+                                dates_included=dates_included, dates_excluded=dates_excluded)
+unique_sessions = all_session_info.groupby(['ID', 'Animal', 'Date'])
 
-source_data = dict(
-    VirmenData=dict(file_path=str(file_paths["virmen"]),
-                    session_id=session_id,
-                    synced_file_path=str(file_paths["processed_ephys"])),
-    PreprocessedData=dict(processed_data_folder=str(file_paths["processed_ephys"]),
-                          raw_data_folder=str(file_paths['raw_ephys']),
-                          channel_map_path=str(file_paths["channel_map"]),
-                          brain_regions=brain_regions,
-                          vr_files=vr_files),
-    PhySortingCA1=dict(folder_path=str(file_paths["kilosort_CA1"]), exclude_cluster_groups=["noise", "mua"]),
-    PhySortingPFC=dict(folder_path=str(file_paths["kilosort_PFC"]), exclude_cluster_groups=["noise", "mua"]),
-    #CellExplorerSorting=dict(spikes_matfile_path=str(file_paths["cell_explorer"])),
-)
+# loop through sessions and run conversion
+for name, session in unique_sessions:
 
-conversion_options = dict(
-    PhySortingCA1=dict(stub_test=stub_test),
-    PhySortingPFC=dict(stub_test=stub_test),
-    #CellExplorerSorting=dict(stub_test=stub_test)
-)
+    # get session-specific info
+    session_id = f"{name[0]}{name[1]}_{name[2]}"  # {ID}{Animal}_{Date} e.g. S25_210913
+    brain_regions = session[['RegAB', 'RegCD']].values[0]
+    file_paths = get_file_paths(session_id)
 
-# remake kilosort files to update unit ids
-phy_files = [key for key in source_data.keys() if 'PhySorting' in key]
-if len(phy_files) > 1:  # TODO - make this more generalizable for any phy sorting/number of regions
-    update_phy_unit_ids(source_data)
+    # add source data
+    stub_test = False
+    source_data = dict(
+        VirmenData=dict(file_path=str(file_paths["virmen"]),
+                        session_id=file_paths["session_id"],
+                        synced_file_path=str(file_paths["processed_ephys"])),
+        PreprocessedData=dict(processed_data_folder=str(file_paths["processed_ephys"]),
+                              raw_data_folder=str(file_paths['raw_ephys']),
+                              channel_map_path=str(file_paths["channel_map"]),
+                              session_info=session))
 
-# run the conversion process
-converter = SingerLabNWBConverter(source_data=source_data)
-metadata = converter.get_metadata()
-converter.run_conversion(
-    nwbfile_path=file_paths["nwbfile"],
-    metadata=metadata,
-    conversion_options=conversion_options,
-    overwrite=True,
-)
+    for br in brain_regions:
+        phy_path = file_paths["processed_ephys"] / br / file_paths["kilosort"]
+        source_data[f'PhySorting{br}'] = dict(folder_path=str(phy_path), exclude_cluster_groups=["noise", "mua"])
+
+    # run the conversion process
+    converter = SingerLabNWBConverter(source_data=source_data)
+    metadata = converter.get_metadata()
+    converter.run_conversion(nwbfile_path=file_paths["nwbfile"], metadata=metadata, overwrite=True)

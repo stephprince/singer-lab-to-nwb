@@ -1,5 +1,4 @@
-import warnings
-
+from git import Repo
 from nwb_conversion_tools import NWBConverter, PhySortingInterface
 from readTrodesExtractedDataFile3 import readTrodesExtractedDataFile
 from pathlib import Path
@@ -14,13 +13,14 @@ class SingerLabNWBConverter(NWBConverter):
     """
     Primary conversion class for Singer Lab data
     """
-
+    # Note on the data interface classes:
+    # If there's no source data provided, then the interfaces won't get used
+    # So for the phy sorting, I could keep a bunch of brain regions here even if I don't use them all
     data_interface_classes = dict(
         VirmenData=UpdateTaskVirmenInterface,
         PreprocessedData=SingerLabPreprocessingInterface,
         PhySortingCA1=PhySortingInterface,
-        PhySortingPFC=PhySortingInterface,
-        # CellExplorerSorting=CellExplorerSortingInterface,
+        PhySortingPFC=PhySortingInterface,  # I feel like there must be a better way to implement but leaving for now
     )
 
     def __init__(self, source_data):
@@ -32,6 +32,15 @@ class SingerLabNWBConverter(NWBConverter):
 
     def get_metadata(self):
         metadata = super().get_metadata()
+
+        # get session info
+        if self.data_interface_objects['PreprocessedData']:
+            session_info = self.data_interface_objects['PreprocessedData'].source_data['session_info']
+            date_of_birth = datetime.strptime(str(session_info['DOB'].values[0]), '%y%m%d')
+            date_of_recording = datetime.strptime(str(session_info['Date'].values[0]), '%y%m%d')
+            age = f'{(date_of_recording - date_of_birth).days} days'
+        else:  # if there's no ephys data, give approximate value (could add details later)
+            age = '2-7 months'
 
         # add subject info
         session_id = self.data_interface_objects['VirmenData'].source_data['session_id']
@@ -45,16 +54,17 @@ class SingerLabNWBConverter(NWBConverter):
                 species="Mus Musculus",
                 genotype="Wild type, C57BL/6J",
                 sex="Male",
-                age="3-7 months",  # TODO check these ages
+                age=age,
             )
         )
 
         # get session start time
         if self.data_interface_objects['PreprocessedData']:  # if there exists ephys data, use that
             # load ephys timestamps file
+            first_recording_file = session_info['Recording'].values[0]
             raw_ephys_folder = Path(self.data_interface_objects['PreprocessedData'].source_data['raw_data_folder'])
-            timestamps_filename = list(raw_ephys_folder.glob(f'*.raw/*.timestamps.dat'))
-            time_data = readTrodesExtractedDataFile(timestamps_filename[0])  # TODO - get first file from recording
+            timestamps_filename = list(raw_ephys_folder.glob(f'*.raw/*{first_recording_file}.timestamps.dat'))
+            time_data = readTrodesExtractedDataFile(timestamps_filename[0])
 
             # extract session start time information
             file_creation_time = datetime.utcfromtimestamp(int(time_data['system_time_at_creation']) / 1e3)  # convert from ms to s
@@ -65,6 +75,11 @@ class SingerLabNWBConverter(NWBConverter):
             virmen_time = virmen_df["time"].apply(lambda x: matlab_time_to_datetime(x))
             session_start_time = virmen_time[0]
 
+        # get git version
+        repo = Repo(search_parent_directories=True)
+        short_hash = repo.head.object.hexsha[:10]
+        remote_url = repo.remotes.origin.url.strip('.git')
+
         # add general experiment info
         metadata['NWBFile'].update(
             experimenter=["Steph Prince"],
@@ -73,15 +88,17 @@ class SingerLabNWBConverter(NWBConverter):
             lab="Singer",
             session_description="Head-fixed mice performed update task in virtual reality",
             session_start_time=str(session_start_time),
+            source_script=f'File created with git repo {remote_url}/tree/{short_hash}',
+            source_script_file_name=f'convert_singer_lab_data.py',
         )
-        # TODO - add tag for which git version this file was generated with
 
         # add spike sorting column info  # TODO - add fields that we want to save info for from phy
-        sorted_path = Path(self.data_interface_objects['PhySortingCA1'].source_data['folder_path'])
-        if sorted_path:
+        spike_sorting_data = any([key for key in self.data_interface_objects if 'PhySorting' in key])
+        if spike_sorting_data:
             metadata["Ecephys"]["UnitProperties"] = [dict(name='Amplitude', description='amplitude imported from phy'),
                                                      dict(name='ContamPct', description='contampct imported from phy'),
-                                                     dict(name='KSLabel', description='auto-label (pre-curation)')
-                                                     ]
+                                                     dict(name='KSLabel', description='auto-label (pre-curation)'),
+                                                     dict(name='ch', description='main channel of unit'),
+                                                     dict(name='sh', description='shank of probe that unit is on'),]
 
         return metadata

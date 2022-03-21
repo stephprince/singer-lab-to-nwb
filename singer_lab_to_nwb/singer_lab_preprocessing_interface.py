@@ -1,4 +1,4 @@
-import numpy as np
+rec_filesimport numpy as np
 import pandas as pd
 
 from pathlib import Path
@@ -13,7 +13,7 @@ from nwb_conversion_tools.utils.json_schema import get_base_schema, get_schema_f
 
 from array_iterators import MultiFileArrayIterator, MultiDimMultiFileArrayIterator
 from singer_lab_mat_loader import SingerLabMatLoader
-from update_task_conversion_utils import check_module
+from update_task_conversion_utils import get_module
 
 
 class SingerLabPreprocessingInterface(BaseDataInterface):
@@ -72,7 +72,7 @@ class SingerLabPreprocessingInterface(BaseDataInterface):
         metadata = super().get_metadata()
 
         # add ecephys info  # TODO - make electrode table loading more accurate and done in the right functions
-        brain_regions = self.source_data['brain_regions']
+        brain_regions = self.source_data['session_info'][['RegAB', 'RegCD']].values[0]
         channel_groups = range(len(brain_regions))
 
         spikegadgets = [dict(
@@ -104,31 +104,27 @@ class SingerLabPreprocessingInterface(BaseDataInterface):
         metadata["Ecephys"] = dict(
             Device=spikegadgets,
             ElectrodeGroup=electrode_group,
-            # Electrodes=[
-            #     dict(name="electrode_number",
-            #          description="0-indexed channel within the probe. Channels 0-31 belong to shank 1 and channels 32-64"
-            #                      " belong to shank 2"),
-            #     dict(name="group_name", description="Name of the electrode group this electrode is part of")
-            # ]
         )
 
         return metadata
 
     def run_conversion(self, nwbfile: NWBFile, metadata: dict):
         """Primary conversion function for the custom Singer lab behavioral interface."""
-        # get general session details from first channel recording file
-        processed_data_folder = Path(self.source_data['processed_data_folder'])
-        subject_num = metadata['Subject']['subject_id'][1:]
-        session_date = processed_data_folder.stem.split(f'{subject_num}_')[1]
-        brain_regions = np.unique([e['location'] for e in metadata['Ecephys']['ElectrodeGroup']])
-        brain_regions = [br for br in brain_regions if br != 'none']
+        # get session info from the session info data frame
+        session_info = self.source_data['session_info']
+        subject_num = session_info['Animal'].values[0]
+        session_date = session_info['Date'].values[0]
+        brain_regions = session_info[['RegAB', 'RegCD']].values[0]
+        vr_files = session_info[['Behavior']].values.squeeze()
+        rec_files = session_info[['Recording']].values.squeeze().tolist()
         mat_loader = SingerLabMatLoader(subject_num, session_date)
 
         # extract recording times to epochs, same for both brain regions
+        processed_data_folder = Path(self.source_data['processed_data_folder'])
         base_path = processed_data_folder / brain_regions[0]
-        filenames = list(base_path.glob('0/eeg*.mat'))  # use eeg files bc most consistent name across singer lab
+        filenames = list(base_path.glob(f'0/eeg{rec_files}.mat'))  # use eeg files bc most consistent name across lab
 
-        recording_epochs = get_recording_epochs(filenames, self.source_data['vr_files'], mat_loader)
+        recording_epochs = get_recording_epochs(filenames, vr_files, mat_loader)
         nwbfile.add_time_intervals(recording_epochs)
 
         # load probe and channel details and use to add electrodes
@@ -191,16 +187,16 @@ class SingerLabPreprocessingInterface(BaseDataInterface):
         # extract lfp
         elec_table_region = nwbfile.create_electrode_table_region(region=list(range(len(channel_dirs))),
                                                                   description='neuronexus_probes')
-        lfp_obj = get_lfp(channel_dirs, mat_loader, elec_table_region)  # get lfp data object
+        lfp_obj = get_lfp(channel_dirs, mat_loader, rec_files, elec_table_region)  # get lfp data object
 
-        check_module(nwbfile, 'ecephys', 'contains processed extracellular electrophysiology data')
+        get_module(nwbfile, 'ecephys', 'contains processed extracellular electrophysiology data')
         nwbfile.processing['ecephys'].add(lfp_obj)
 
         # extract filtered lfp bands (beta, delta, theta, gamma, ripple)
         lfp_ts = nwbfile.processing['ecephys']['LFP']['LFP']
-        amp_obj = get_lfp_decomposition(channel_dirs, mat_loader, lfp_ts, 'amplitude')
-        phase_obj = get_lfp_decomposition(channel_dirs, mat_loader, lfp_ts, 'phase')
-        envelope_obj = get_lfp_decomposition(channel_dirs, mat_loader, lfp_ts, 'envelope')
+        amp_obj = get_lfp_decomposition(channel_dirs, mat_loader, rec_files, lfp_ts, 'amplitude', 'uV')
+        phase_obj = get_lfp_decomposition(channel_dirs, mat_loader, rec_files, lfp_ts, 'phase', 'degrees')
+        envelope_obj = get_lfp_decomposition(channel_dirs, mat_loader, rec_files, lfp_ts, 'envelope', 'uV')
 
         nwbfile.processing['ecephys'].add(amp_obj)
         nwbfile.processing['ecephys'].add(phase_obj)
@@ -216,12 +212,12 @@ class SingerLabPreprocessingInterface(BaseDataInterface):
             nwbfile.processing['ecephys'].add(lfp_events)
 
         # extract digital and analog channels using the singer lab mat files
-        analog_obj = get_analog_timeseries(nwbfile, processed_data_folder, mat_loader)
+        analog_obj = get_analog_timeseries(nwbfile, processed_data_folder, mat_loader, rec_files)
         for analog_ts in analog_obj.values():
             nwbfile.add_acquisition(analog_ts)
 
         # extract digital signals (non-continuous, stored as time intervals)
-        digital_obj = get_digital_events(processed_data_folder, rec_durations, mat_loader)
+        digital_obj = get_digital_events(processed_data_folder, rec_durations, mat_loader, rec_files)
         for digital_events in digital_obj.values():
             nwbfile.add_time_intervals(digital_events)
 
@@ -255,9 +251,9 @@ def get_recording_epochs(filenames, vr_files, mat_loader):
     return recording_epochs
 
 
-def get_lfp(channel_dirs, mat_loader, elec_table_region):
+def get_lfp(channel_dirs, mat_loader, rec_files, elec_table_region):
     # get metadata from first file (should be same for all)
-    filenames = list(channel_dirs[0].glob(f'eeg?.mat'))  # TODO - get recs from spreadsheet
+    filenames = list(channel_dirs[0].glob(f'eeg{rec_files}.mat'))
     recs = [f.stem.strip('eeg') for f in filenames]
     metadata = mat_loader.run_conversion(filenames[0], recs[0], 'scipy')
     temp_data = mat_loader.run_conversion(filenames, recs, 'concat_array')
@@ -274,37 +270,37 @@ def get_lfp(channel_dirs, mat_loader, elec_table_region):
     data = MultiFileArrayIterator(channel_dirs, 'eeg', mat_loader, recs, num_samples)
 
     # add electrical series to NWB file
-    data_obj = LFP(name=band_name)  # TODO - determine units of the LFP signal
+    data_obj = LFP(name=band_name)
     ecephys_ts = ElectricalSeries(name=band_name,
                                   data=H5DataIO(data, compression='gzip'),
                                   starting_time=0.0,
                                   # filtering=filter,
                                   rate=float(samp_rate),
                                   electrodes=elec_table_region,
-                                  description=descript)
+                                  description=descript,
+                                  conversion=0.001  # data are in uV so multiply by 0.001 to get base units of volt
+                                  )
     data_obj.add_electrical_series(ecephys_ts)
 
     return data_obj
 
 
-def get_lfp_decomposition(channel_dirs, mat_loader, lfp_ts, metric):
+def get_lfp_decomposition(channel_dirs, mat_loader, rec_files, lfp_ts, metric, units):
     freq_bands = ['delta', 'theta', 'beta', 'lowgamma', 'ripple']
     limits = [(1, 4), (4, 12), (12, 30), (20, 50), (150, 250)]  # TODO - don't hardcode and pull from somewhere?
 
     # get metadata from first channel and file and band (should be same for all)
-    filenames = list(channel_dirs[0].glob(f'EEG/{freq_bands[0]}?.mat'))
-    recs = [f.stem.strip(f'{freq_bands[0]}') for f in filenames]  # TODO - get recs from spreadsheet
-    metadata = mat_loader.run_conversion(filenames[0], recs[0], 'scipy')
+    filenames = list(channel_dirs[0].glob(f'EEG/{freq_bands[0]}{rec_files}.mat'))
+    metadata = mat_loader.run_conversion(filenames[0], rec_files[0], 'scipy')
     samp_rate = metadata.samprate
-    temp_data = mat_loader.run_conversion(filenames, recs, 'concat_array')
+    temp_data = mat_loader.run_conversion(filenames, rec_files, 'concat_array')
     num_samples = len(temp_data)
 
     # get description of each filter
     descript = f"filtered ephys {metric} data generated by singer lab preprocessing pipeline"
     for band in freq_bands:
-        filenames = list(channel_dirs[0].glob(f'EEG/{band}?.mat'))
-        recs = [f.stem.strip(f'{band}') for f in filenames]  # TODO - get recs from spreadsheet
-        metadata = mat_loader.run_conversion(filenames[0], recs[0], 'scipy')
+        filenames = list(channel_dirs[0].glob(f'EEG/{band}{rec_files}.mat'))
+        metadata = mat_loader.run_conversion(filenames[0], rec_files[0], 'scipy')
         filter_descript = f"{band} {' '.join(''.join(metadata.descript).split())}"
         descript = "\n".join([descript, filter_descript])
 
@@ -323,7 +319,8 @@ def get_lfp_decomposition(channel_dirs, mat_loader, lfp_ts, metric):
                                         starting_time=0.0,
                                         rate=float(samp_rate),
                                         source_timeseries=lfp_ts,
-                                        description=descript)
+                                        description=descript,
+                                        units=units)
 
     # add info about frequency bands and limits
     for band, lim in zip(freq_bands, limits):
@@ -371,7 +368,7 @@ def get_lfp_events(processed_data_folder, br, channel, rec_durations, mat_loader
                 pass
 
         # loop through files to add events
-        filenames = list((processed_data_folder / br / str(channel)).glob(f'{band}*.mat'))  # TODO get recs
+        filenames = list((processed_data_folder / br / str(channel)).glob(f'{band}{rec_files}.mat'))
         duration = 0.0
         for ind, file in enumerate(filenames):
             # load up the data
@@ -418,7 +415,7 @@ def get_lfp_events(processed_data_folder, br, channel, rec_durations, mat_loader
     return lfp_events
 
 
-def get_analog_timeseries(nwbfile, data_folder, mat_loader):
+def get_analog_timeseries(nwbfile, data_folder, mat_loader, rec_files):
     # define analog signals saved in data
     analog_descript_dict = {'licks': 'signal from photointerrupter circuit, values of 5V indicate the mouse tongue is '
                                      'has broken through the laser beam, values of 0V indicate baseline',
@@ -434,10 +431,9 @@ def get_analog_timeseries(nwbfile, data_folder, mat_loader):
     analog_obj = dict.fromkeys(analog_descript_dict.keys())
     for name, chan in analog_chan_dict.items():
         # concatenate analog signal across recordings
-        analog_filenames = list(data_folder.glob(f'{name}*.mat'))  # TODO - only add recordings based on spreadsheet
-        recs = [f.stem.strip(name) for f in analog_filenames]
-        analog_data = mat_loader.run_conversion(analog_filenames, recs, 'concat_array')
-        metadata = mat_loader.run_conversion(analog_filenames[0], recs[0], 'scipy')
+        analog_filenames = list(data_folder.glob(f'{name}{rec_files}.mat'))
+        analog_data = mat_loader.run_conversion(analog_filenames, rec_files, 'concat_array')
+        metadata = mat_loader.run_conversion(analog_filenames[0], rec_files, 'scipy')
 
         # generate electrodes and electrode region
         last_electrode = max(nwbfile.electrodes['id'])
@@ -463,7 +459,7 @@ def get_analog_timeseries(nwbfile, data_folder, mat_loader):
     return analog_obj
 
 
-def get_digital_events(data_folder, rec_durations, mat_loader):
+def get_digital_events(data_folder, rec_durations, mat_loader, rec_files):
     # define digital signals and channel dicts
     dig_descript_dict = {'sync': 'synchronizing pulse sent from virmen software, from spikegadgets digital signals',
                          'trial': 'indicates when trial is occurring vs inter trial, from spikegadgets digital signals',
@@ -476,11 +472,11 @@ def get_digital_events(data_folder, rec_durations, mat_loader):
     for name, chan in dig_chan_dict.items():
 
         # get event times from all files adjusted for time
-        digital_filenames = list(data_folder.glob(f'{name}*.mat'))
+        digital_filenames = list(data_folder.glob(f'{name}{rec_files}.mat'))
         all_on_times = []
         all_off_times = []
         duration = 0.0
-        for ind, file in enumerate(digital_filenames):  # TODO - only add recordings based on the ephys spreadsheet
+        for ind, file in enumerate(digital_filenames):
             # load up the data
             matin = mat_loader.run_conversion(file, file.stem.strip(name), 'scipy')
             samp_rate = float(matin.samprate)
