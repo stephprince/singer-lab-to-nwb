@@ -1,4 +1,4 @@
-rec_filesimport numpy as np
+import numpy as np
 import pandas as pd
 
 from pathlib import Path
@@ -71,7 +71,7 @@ class SingerLabPreprocessingInterface(BaseDataInterface):
     def get_metadata(self):
         metadata = super().get_metadata()
 
-        # add ecephys info  # TODO - make electrode table loading more accurate and done in the right functions
+        # add ecephys info
         brain_regions = self.source_data['session_info'][['RegAB', 'RegCD']].values[0]
         channel_groups = range(len(brain_regions))
 
@@ -108,7 +108,7 @@ class SingerLabPreprocessingInterface(BaseDataInterface):
 
         return metadata
 
-    def run_conversion(self, nwbfile: NWBFile, metadata: dict):
+    def run_conversion(self, nwbfile: NWBFile, metadata: dict, stub_test: bool = False):
         """Primary conversion function for the custom Singer lab behavioral interface."""
         # get session info from the session info data frame
         session_info = self.source_data['session_info']
@@ -117,30 +117,41 @@ class SingerLabPreprocessingInterface(BaseDataInterface):
         brain_regions = session_info[['RegAB', 'RegCD']].values[0]
         vr_files = session_info[['Behavior']].values.squeeze()
         rec_files = session_info[['Recording']].values.squeeze().tolist()
+
         mat_loader = SingerLabMatLoader(subject_num, session_date)
 
         # extract recording times to epochs, same for both brain regions
         processed_data_folder = Path(self.source_data['processed_data_folder'])
         base_path = processed_data_folder / brain_regions[0]
         filenames = list(base_path.glob(f'0/eeg{rec_files}.mat'))  # use eeg files bc most consistent name across lab
+        assert len(filenames) == len(rec_files), "Number of eeg files does not match expected number of recordings"
 
         recording_epochs = get_recording_epochs(filenames, vr_files, mat_loader)
         nwbfile.add_time_intervals(recording_epochs)
+
+        # if stub_test, cut file to shortest recording duration
+        if stub_test:
+            durations = recording_epochs['end_time'] - recording_epochs['start_time']
+            shortest_rec = rec_files[np.where(durations == min(durations))[0]]
+            rec_files = shortest_rec
 
         # load probe and channel details and use to add electrodes
         probe_file_path = Path(self.source_data['channel_map_path'])
         probe_map = pd.read_csv(probe_file_path)
 
-        num_electrodes = 0
-        device = nwbfile.create_device(name=metadata['Ecephys']['Device'][0]['name'])  # TODO - search for MCU device
+        num_electrodes = 0  # TODO - assert number of electrodes matches expected value
         for group in metadata['Ecephys']['ElectrodeGroup']:
-            if group['name'] is not 'analog_inputs':
-                nwbfile.create_electrode_group(name=group['name'],
-                                               description=group['description'],
-                                               location=group['location'],
-                                               device=device)
+            # add device and electrode group if needed
+            device_descript = [d['description'] for d in metadata['Ecephys']['Device'] if d['name'] == group['device']]
+            if group['device'] not in nwbfile.devices:
+                device = nwbfile.create_device(name=group['device'], description=str(device_descript[0]))
+            nwbfile.create_electrode_group(name=group['name'],
+                                           description=group['description'],
+                                           location=group['location'],
+                                           device=device)
 
-                # generate electrodes and electrode region
+            # generate electrodes from probe
+            if group['name'] is not 'analog_inputs':
                 for index, row in probe_map.iterrows():
                     nwbfile.add_electrode(id=index + num_electrodes,
                                           x=np.nan, y=np.nan, z=np.nan,
@@ -153,16 +164,8 @@ class SingerLabPreprocessingInterface(BaseDataInterface):
 
                 num_electrodes = index + 1  # add 1 so that next loop creates new unique index
 
-        # create electrode groups for analog and  digital data
-        device = nwbfile.create_device(name=metadata['Ecephys']['Device'][1]['name'])  # TODO - search for ECU device
-        electrode_group = metadata['Ecephys']['ElectrodeGroup'][-1]
-        nwbfile.create_electrode_group(name=electrode_group['name'],
-                                       description=electrode_group['description'],
-                                       location=electrode_group['location'],
-                                       device=device)
-
         # get hardware channel info and list of channel directories sorted by depth to use for mapping
-        channel_dirs = []  # TODO - confirm the mapping of CA1/PFC to the electrode channels is correct
+        channel_dirs = []  # TODO - assert number of channels matches expected value
         hw_channels = []
         for br in brain_regions:  # get channel dirs ordered by depth first brain region and then second
             for ntrode, row in probe_map.iterrows():

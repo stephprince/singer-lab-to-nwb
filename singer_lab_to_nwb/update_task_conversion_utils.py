@@ -2,12 +2,11 @@ import pandas as pd
 
 from pathlib import Path
 
-def get_file_paths(session_id):
+def get_file_paths(base_path, session_id):
     """
     sets default file paths for different data types
     """
 
-    base_path = Path("Y:/singer/Steph/Code/singer-lab-to-nwb/data")
     raw_ephys_path = base_path / "RawData" / "UpdateTask" / session_id
     processed_ephys_path = base_path / "ProcessedData" / "UpdateTask" / session_id
     virmen_path = base_path / "Virmen Logs" / "UpdateTask"
@@ -31,13 +30,14 @@ def get_session_info(filename, animals, dates_included=None, dates_excluded=None
 
     # if None values, deal with appropriately so it doesn't negatively affect the filtering
     dates_incl = dates_included or df_all['Date']                   # if no value given, include all dates
+    dates_excl = dates_excluded or [None]
     behavior = behavior or df_all['Behavior'].unique()              # if no value given, include all behavior types
 
     # filter session info depending on cases
     session_info = df_all[(df_all['Include'] == 1) &                # DOES HAVE an include value in the column
                           (df_all['Animal'].isin(animals)) &        # IS IN the animals list
                           (df_all['Date'].isin(dates_incl)) &       # IS IN the included dates list
-                          ~(df_all['Date'].isin(dates_excluded)) &  # NOT IN the excluded dates list
+                          ~(df_all['Date'].isin(dates_excl)) &  # NOT IN the excluded dates list
                           (df_all['Behavior'].isin(behavior))       # IS IN the behavior type list
                           ]
 

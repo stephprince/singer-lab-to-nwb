@@ -21,7 +21,7 @@ class PhyUnitIDGenerator:
         for br in self.brain_regions:
             # remap unit ids
             phy_folder = self.base_path / br / "sorted" / "kilosort"
-            self.remap_unit_ids(phy_folder, start_id=num_units, start_chan=num_channels)
+            self.remap_ids(phy_folder, start_id=num_units, start_chan=num_channels)
 
             # update units and channel numbers for next region
             num_units = num_units + self.get_number_of_units(phy_folder)

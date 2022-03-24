@@ -14,8 +14,6 @@ class SingerLabMatLoader:
         self.filenames = [Path(f) for f in filenames]  # convert filenames to Path if not already
         self.recs = recs
 
-        # TODO confirm that filename and recs match the subject and session info
-
         # determine output data type and run related function
         if output_type == 'scipy':
             data = self.convert_to_scipy_obj()

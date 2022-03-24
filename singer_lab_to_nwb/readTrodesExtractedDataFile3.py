@@ -69,8 +69,8 @@ def parseFields(fieldstr):
 # fields = readTrodesExtractedDataFile('16ChannelRec.spikes_nt10.dat')
 # print(fields['data'])
 
-if argv.__len__() > 1:
-    np.set_printoptions(threshold='nan')
-    fields = readTrodesExtractedDataFile(argv[1])
-    print(fields['data'])
+# if argv.__len__() > 1:
+#     np.set_printoptions()
+#     fields = readTrodesExtractedDataFile(argv[1])
+#     print(fields['data'])
 
