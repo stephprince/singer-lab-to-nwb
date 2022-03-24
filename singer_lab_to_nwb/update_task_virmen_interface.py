@@ -10,9 +10,10 @@ from pynwb.epoch import TimeIntervals
 from nwb_conversion_tools.basedatainterface import BaseDataInterface
 from nwb_conversion_tools.utils.json_schema import get_base_schema
 
+from update_task_conversion_utils import get_module
 from mat_conversion_utils import convert_mat_file_to_dict, matlab_time_to_datetime
-from update_task_conversion_utils import check_module
 from singer_lab_mat_loader import SingerLabMatLoader
+
 
 class UpdateTaskVirmenInterface(BaseDataInterface):
     """
@@ -60,7 +61,7 @@ class UpdateTaskVirmenInterface(BaseDataInterface):
         for ts in timestamps_list:
             behavior_epochs.add_row(start_time=ts.values[0], stop_time=ts.values[-1])
 
-        check_module(nwbfile, 'behavior', 'contains processed behavioral data')
+        get_module(nwbfile, 'behavior', 'contains processed behavioral data')
         nwbfile.add_time_intervals(behavior_epochs)
 
         # create behavioral time series objects and add to processing module
@@ -85,15 +86,29 @@ class UpdateTaskVirmenInterface(BaseDataInterface):
         task_state_dict = dict(zip(task_state_names, range(1, 9)))
 
         # add 1 to trial start times bc that is when teleportation occurs and world switches to new one and
-        trial_starts = virmen_df.index[virmen_df.taskState == task_state_dict['trial_start']].to_numpy() + 1
-        trial_ends = virmen_df.index[virmen_df.taskState == task_state_dict['trial_end']].to_numpy()
+        t_starts = virmen_df.index[virmen_df.taskState == task_state_dict['trial_start']].to_numpy() + 1
+        t_ends = virmen_df.index[virmen_df.taskState == task_state_dict['trial_end']].to_numpy()
 
-        # clean up times for start and end of file
-        if trial_starts[0] > trial_ends[0]:  # if first trial end time is before the first start, remove first end
-            trial_ends = trial_ends[1:]
+        # clean up times for start and end of file and file transition points
+        file_switch_inds = [len(df) for df in virmen_df_list]
+        start_ind = 0
+        trial_starts = []
+        trial_ends = []
+        for switch_ind in file_switch_inds:
+            t_starts_temp = t_starts[(t_starts > start_ind) & (t_starts < start_ind + switch_ind)]
+            t_ends_temp = t_ends[(t_ends > start_ind) & (t_ends < start_ind + switch_ind)]
 
-        if trial_ends[-1] < trial_starts[-1]:  # if last trial start is after trial_end, remove last trial start
-            trial_starts = trial_starts[:-1]
+            # if first trial end time is before the first start, remove first end
+            if t_starts_temp[0] > t_ends_temp[0]:
+                t_ends_temp = t_ends_temp[1:]
+
+            # if last trial start is after trial_end, remove last trial start
+            if t_ends_temp[-1] < t_starts_temp[-1]:
+                t_starts_temp = t_starts_temp[:-1]
+
+            start_ind = start_ind + switch_ind  # add file iteration lengths
+            trial_starts.extend(t_starts_temp)
+            trial_ends.extend(t_ends_temp)
 
         # add all trials and corresponding info to nwb file
         for start, end in zip(trial_starts, trial_ends):
@@ -106,7 +121,7 @@ class UpdateTaskVirmenInterface(BaseDataInterface):
         nwbfile.add_trial_column(name='maze_id', description=f'{maze_names_dict}', data=maze_ids)
 
         # trial types l/r, none/stay/switch
-        trial_types_dict = dict(zip(('right', 'left'), range(1,3)))  # flip right and left because projector flips
+        trial_types_dict = dict(zip(('right', 'left'), range(1, 3)))  # flip right and left because projector flips
         update_names_dict = dict(zip(('nan', 'switch', 'stay'), range(1, 4)))
         trial_types = virmen_df['trialType'][trial_starts].to_numpy()
         update_types = virmen_df['trialTypeUpdate'][trial_starts].to_numpy()
@@ -121,7 +136,7 @@ class UpdateTaskVirmenInterface(BaseDataInterface):
 
         # trial durations
         durations_sec = np.array(timestamps)[trial_ends] - np.array(timestamps)[trial_starts]
-        durations_ind = trial_ends - trial_starts
+        durations_ind = np.array(trial_ends) - np.array(trial_starts) + 1  # add 1 for inclusive # of iterations
         nwbfile.add_trial_column(name='duration', description='duration in seconds', data=durations_sec)
         nwbfile.add_trial_column(name='iterations', description='number of samples/vr frames', data=durations_ind)
 
@@ -161,7 +176,12 @@ class UpdateTaskVirmenInterface(BaseDataInterface):
         virmen_df_list = []
         if self.source_data['synced_file_path']:  # if there exists ephys data, use that
             base_path = Path(self.source_data['synced_file_path'])
-            virmen_files = list(base_path.glob('virmenDataSynced*.csv'))
+            recs = self.source_data['ephys_session_info'][['Recording']].values.squeeze().tolist()
+            behavior_recs = self.source_data['ephys_session_info'][['Behavior']].values.squeeze().tolist()
+
+            virmen_files = list(base_path.glob(f'virmenDataSynced{recs}.csv'))
+            assert sum(behavior_recs) == len(virmen_files), 'Number of virmen files does not match expected number of ' \
+                                                            'behavior sessions '
 
             # load up csv files
             for files in virmen_files:
@@ -173,8 +193,12 @@ class UpdateTaskVirmenInterface(BaseDataInterface):
             base_path = Path(self.source_data['file_path'])
             virmen_files = list(base_path.glob(f'{session_id}*/virmenDataRaw.mat'))
 
+            behavior_recs = self.source_data['ephys_session_info'][['Behavior']].values.squeeze().tolist()
+            assert sum(behavior_recs) == len(virmen_files), 'Number of virmen files does not match expected number of ' \
+                                                     'behavior sessions '
+
             # load up mat files
-            for files in virmen_files:  # TODO - use recording info
+            for files in virmen_files:
                 matin = convert_mat_file_to_dict(files)
                 virmen_df = pd.DataFrame(matin['virmenData']['data'], columns=matin['virmenData']['dataHeaders'])
                 virmen_df_list.append(virmen_df)
@@ -185,9 +209,11 @@ class UpdateTaskVirmenInterface(BaseDataInterface):
         if self.source_data['synced_file_path']:  # if there exists ephys data, use that
             # get base file paths
             base_path = Path(self.source_data['synced_file_path'])
-            virmen_files = list(base_path.glob('virmenDataSynced*.csv'))
-            recs = [v.stem[-1] for v in virmen_files]  # TODO - get from rec input info
-            all_eeg_files = list(base_path.glob(f'CA1/0/eeg*.mat'))
+            recs = self.source_data['ephys_session_info'][['Recording']].values.squeeze().tolist()
+            all_eeg_files = list(base_path.glob(f'CA1/0/eeg{recs}.mat'))
+            virmen_files = list(base_path.glob(f'virmenDataSynced{recs}.csv'))
+            virmen_recs = [int(path.stem[-1]) for path in virmen_files]
+            assert len(virmen_df_list) == len(virmen_recs), 'Number of virmen dataframes does not match number of recs'
 
             # get durations and start times of ALL recordings (including non-VR ones)
             start = 0.0  # initialize start time to 0 sec
@@ -202,8 +228,8 @@ class UpdateTaskVirmenInterface(BaseDataInterface):
             # calculate timestamps of virmen data based on these samples and durations
             sg_samp_rate = eeg_mat.samprate * eeg_mat.downsample
             timestamps = []
-            recs_0_based = [int(r)-1 for r in recs]  # adjust by 1 because 0-based indexing vs. matlab file names
-            for df, rec in zip(virmen_df_list, recs_0_based):
+            virmen_recs_0_based = [int(r)-1 for r in virmen_recs]  # adjust by 1 because 0-based indexing vs. file names
+            for df, rec in zip(virmen_df_list, virmen_recs_0_based):
                 sg_samples = df["spikeGadgetsTimes"]
                 sg_time_elapsed = (sg_samples - sg_start_samples[rec])/sg_samp_rate  # since 1st ephys sample of that rec
                 sg_time_elapsed = sg_time_elapsed + sg_start_times[rec]  # adjust for any previous recordings
