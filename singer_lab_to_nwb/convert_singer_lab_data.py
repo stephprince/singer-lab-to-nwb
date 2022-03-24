@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from singer_lab_nwb_converter import SingerLabNWBConverter
 from update_task_conversion_utils import get_file_paths, get_session_info
 
@@ -7,6 +9,7 @@ dates_included = [210913]
 dates_excluded = []
 
 # load session info
+base_path = Path("Y:/singer/Steph/Code/singer-lab-to-nwb/data")  # ALL file paths will be based on this base directory
 spreadsheet_filename = 'Y:/singer/Steph/Code/update-project/docs/metadata-summaries/VRUpdateTaskEphysSummary.csv'
 all_session_info = get_session_info(filename=spreadsheet_filename, animals=animals,
                                 dates_included=dates_included, dates_excluded=dates_excluded)
@@ -18,14 +21,15 @@ for name, session in unique_sessions:
     # get session-specific info
     session_id = f"{name[0]}{name[1]}_{name[2]}"  # {ID}{Animal}_{Date} e.g. S25_210913
     brain_regions = session[['RegAB', 'RegCD']].values[0]
-    file_paths = get_file_paths(session_id)
+    file_paths = get_file_paths(base_path, session_id)
 
     # add source data
     stub_test = False
     source_data = dict(
         VirmenData=dict(file_path=str(file_paths["virmen"]),
                         session_id=file_paths["session_id"],
-                        synced_file_path=str(file_paths["processed_ephys"])),
+                        synced_file_path=str(file_paths["processed_ephys"]),
+                        ephys_session_info=session),
         PreprocessedData=dict(processed_data_folder=str(file_paths["processed_ephys"]),
                               raw_data_folder=str(file_paths['raw_ephys']),
                               channel_map_path=str(file_paths["channel_map"]),

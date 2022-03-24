@@ -1,3 +1,5 @@
+import pandas as pd
+
 from git import Repo
 from nwb_conversion_tools import NWBConverter, PhySortingInterface
 from readTrodesExtractedDataFile3 import readTrodesExtractedDataFile
@@ -6,7 +8,7 @@ from datetime import datetime, timedelta
 
 from update_task_virmen_interface import UpdateTaskVirmenInterface
 from singer_lab_preprocessing_interface import SingerLabPreprocessingInterface
-from mat_conversion_utils import convert_mat_file_to_dict
+from mat_conversion_utils import convert_mat_file_to_dict, matlab_time_to_datetime
 
 
 class SingerLabNWBConverter(NWBConverter):
@@ -34,8 +36,10 @@ class SingerLabNWBConverter(NWBConverter):
         metadata = super().get_metadata()
 
         # get session info
-        if self.data_interface_objects['PreprocessedData']:
-            session_info = self.data_interface_objects['PreprocessedData'].source_data['session_info']
+        synced_file_path = self.data_interface_objects['VirmenData'].source_data['synced_file_path']
+        synced_files = list(Path(synced_file_path).glob('virmenDataSynced*.csv'))
+        if synced_files:
+            session_info = self.data_interface_objects['VirmenData'].source_data['ephys_session_info']
             date_of_birth = datetime.strptime(str(session_info['DOB'].values[0]), '%y%m%d')
             date_of_recording = datetime.strptime(str(session_info['Date'].values[0]), '%y%m%d')
             age = f'{(date_of_recording - date_of_birth).days} days'
@@ -47,6 +51,8 @@ class SingerLabNWBConverter(NWBConverter):
         virmen_base_path = Path(self.data_interface_objects['VirmenData'].source_data['file_path'])
         virmen_file_paths = list(virmen_base_path.glob(f'{session_id}*/virmenDataRaw.mat'))
         session_data = convert_mat_file_to_dict(mat_file_name=virmen_file_paths[0])
+        virmen_df = pd.DataFrame(session_data['virmenData']['data'], columns=session_data['virmenData']['dataHeaders'])
+        virmen_time = virmen_df["time"].apply(lambda x: matlab_time_to_datetime(x))
         subject_id = session_data['virmenData']["sessioninfo"]
         metadata.update(
             Subject=dict(
@@ -59,7 +65,7 @@ class SingerLabNWBConverter(NWBConverter):
         )
 
         # get session start time
-        if self.data_interface_objects['PreprocessedData']:  # if there exists ephys data, use that
+        if 'PreprocessedData' in self.data_interface_objects:  # if there exists ephys data, use that
             # load ephys timestamps file
             first_recording_file = session_info['Recording'].values[0]
             raw_ephys_folder = Path(self.data_interface_objects['PreprocessedData'].source_data['raw_data_folder'])
@@ -71,9 +77,8 @@ class SingerLabNWBConverter(NWBConverter):
             samples_before_start = int(time_data['first_timestamp']) - int(time_data['timestamp_at_creation'])
             session_start_time = file_creation_time + timedelta(seconds=samples_before_start/int(time_data['clockrate']))
         else:  # otherwise use behavioral data
-            virmen_df = pd.DataFrame(session_data['virmenData']['data'], columns=session_data['virmenData']['dataHeaders'])
-            virmen_time = virmen_df["time"].apply(lambda x: matlab_time_to_datetime(x))
             session_start_time = virmen_time[0]
+        assert session_start_time >= virmen_time[0], 'Invalid setup: behavior data occurs before session start time'
 
         # get git version
         repo = Repo(search_parent_directories=True)
@@ -92,7 +97,7 @@ class SingerLabNWBConverter(NWBConverter):
             source_script_file_name=f'convert_singer_lab_data.py',
         )
 
-        # add spike sorting column info  # TODO - add fields that we want to save info for from phy
+        # add spike sorting column info
         spike_sorting_data = any([key for key in self.data_interface_objects if 'PhySorting' in key])
         if spike_sorting_data:
             metadata["Ecephys"]["UnitProperties"] = [dict(name='Amplitude', description='amplitude imported from phy'),
