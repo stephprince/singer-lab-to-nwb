@@ -131,15 +131,19 @@ class SingerLabPreprocessingInterface(BaseDataInterface):
 
         # if stub_test, cut file to shortest recording duration
         if stub_test:
-            durations = recording_epochs['end_time'] - recording_epochs['start_time']
-            shortest_rec = rec_files[np.where(durations == min(durations))[0]]
-            rec_files = shortest_rec
+            durations = np.array(recording_epochs['stop_time']) - np.array(recording_epochs['start_time'])
+            shortest_rec = rec_files[int(np.where(durations == min(durations))[0])]
+            rec_files = [str(shortest_rec)]
+            nwbfile.intervals['recording_epochs'].add_column(name='stub_test_includes',
+                                                             description='indicates which recording was used to '
+                                                                         'generate a stub test for testing purposes',
+                                                             data=durations == min(durations))
 
         # load probe and channel details and use to add electrodes
         probe_file_path = Path(self.source_data['channel_map_path'])
         probe_map = pd.read_csv(probe_file_path)
 
-        num_electrodes = 0  # TODO - assert number of electrodes matches expected value
+        num_electrodes = 0
         for group in metadata['Ecephys']['ElectrodeGroup']:
             # add device and electrode group if needed
             device_descript = [d['description'] for d in metadata['Ecephys']['Device'] if d['name'] == group['device']]
@@ -165,13 +169,14 @@ class SingerLabPreprocessingInterface(BaseDataInterface):
                 num_electrodes = index + 1  # add 1 so that next loop creates new unique index
 
         # get hardware channel info and list of channel directories sorted by depth to use for mapping
-        channel_dirs = []  # TODO - assert number of channels matches expected value
+        channel_dirs = []
         hw_channels = []
         for br in brain_regions:  # get channel dirs ordered by depth first brain region and then second
             for ntrode, row in probe_map.iterrows():
                 channel = row['HW Channel']
                 hw_channels.append(int(channel))
                 channel_dirs.append(processed_data_folder / br / str(int(channel)))
+        assert(len(channel_dirs) == len(brain_regions)*len(probe_map))
 
         nwbfile.add_electrode_column(name='hardware_channel',
                                      description='channel ID from hardware wiring, used as folder names for singer '
@@ -196,21 +201,22 @@ class SingerLabPreprocessingInterface(BaseDataInterface):
         nwbfile.processing['ecephys'].add(lfp_obj)
 
         # extract filtered lfp bands (beta, delta, theta, gamma, ripple)
-        lfp_ts = nwbfile.processing['ecephys']['LFP']['LFP']
-        amp_obj = get_lfp_decomposition(channel_dirs, mat_loader, rec_files, lfp_ts, 'amplitude', 'uV')
-        phase_obj = get_lfp_decomposition(channel_dirs, mat_loader, rec_files, lfp_ts, 'phase', 'degrees')
-        envelope_obj = get_lfp_decomposition(channel_dirs, mat_loader, rec_files, lfp_ts, 'envelope', 'uV')
+        if not stub_test:
+            lfp_ts = nwbfile.processing['ecephys']['LFP']['LFP']
+            amp_obj = get_lfp_decomposition(channel_dirs, mat_loader, rec_files, lfp_ts, 'amplitude', 'uV')
+            phase_obj = get_lfp_decomposition(channel_dirs, mat_loader, rec_files, lfp_ts, 'phase', 'degrees')
+            envelope_obj = get_lfp_decomposition(channel_dirs, mat_loader, rec_files, lfp_ts, 'envelope', 'uV')
 
-        nwbfile.processing['ecephys'].add(amp_obj)
-        nwbfile.processing['ecephys'].add(phase_obj)
-        nwbfile.processing['ecephys'].add(envelope_obj)
+            nwbfile.processing['ecephys'].add(amp_obj)
+            nwbfile.processing['ecephys'].add(phase_obj)
+            nwbfile.processing['ecephys'].add(envelope_obj)
 
         # extract lfp event times (thetas, nonthetas, ripples)
         elec_df = nwbfile.electrodes.to_dataframe()
         ripple_channel = elec_df['hardware_channel'][elec_df['ripple_channel'] == 1].values[0]
         rec_durations = nwbfile.intervals['recording_epochs'].to_dataframe()
 
-        lfp_events_obj = get_lfp_events(processed_data_folder, 'CA1', ripple_channel, rec_durations, mat_loader)
+        lfp_events_obj = get_lfp_events(processed_data_folder, 'CA1', ripple_channel, rec_durations, mat_loader, rec_files)
         for lfp_events in lfp_events_obj.values():
             nwbfile.processing['ecephys'].add(lfp_events)
 
@@ -237,6 +243,9 @@ def get_recording_epochs(filenames, vr_files, mat_loader):
     recording_epochs.add_column(name="behavior_task",
                                 description="indicates whether VR task was displayed on the screen (1), or if the "
                                             "screen was left covered/blank as a baseline period (0)")
+    recording_epochs.add_column(name="recording_number",
+                                description="what the original recording file number this epoch was (as saved in the"
+                                            "raw spikegadgets and .mat file names), 1-based indexing")
 
     # loop through files to get time intervals
     start_time = 0.0  # initialize start time to 0 sec
@@ -248,7 +257,7 @@ def get_recording_epochs(filenames, vr_files, mat_loader):
         # add to nwb file
         duration = (len(eeg_mat.time) / eeg_mat.samprate)  # in seconds
         recording_epochs.add_row(start_time=start_time, stop_time=start_time + duration,
-                                 behavior_task=vr_files[ind])
+                                 behavior_task=vr_files[ind], recording_number=rec)
         start_time = start_time + duration
 
     return recording_epochs
@@ -257,6 +266,7 @@ def get_recording_epochs(filenames, vr_files, mat_loader):
 def get_lfp(channel_dirs, mat_loader, rec_files, elec_table_region):
     # get metadata from first file (should be same for all)
     filenames = list(channel_dirs[0].glob(f'eeg{rec_files}.mat'))
+    assert len(filenames) == len(rec_files)
     recs = [f.stem.strip('eeg') for f in filenames]
     metadata = mat_loader.run_conversion(filenames[0], recs[0], 'scipy')
     temp_data = mat_loader.run_conversion(filenames, recs, 'concat_array')
@@ -281,7 +291,8 @@ def get_lfp(channel_dirs, mat_loader, rec_files, elec_table_region):
                                   rate=float(samp_rate),
                                   electrodes=elec_table_region,
                                   description=descript,
-                                  conversion=0.001  # data are in uV so multiply by 0.001 to get base units of volt
+                                  conversion=0.001,  # data are in uV so multiply by 0.001 to get base units of volt
+                                  comments=f'includes original 1-based recording file numbers: {rec_files}'
                                   )
     data_obj.add_electrical_series(ecephys_ts)
 
@@ -303,6 +314,7 @@ def get_lfp_decomposition(channel_dirs, mat_loader, rec_files, lfp_ts, metric, u
     descript = f"filtered ephys {metric} data generated by singer lab preprocessing pipeline"
     for band in freq_bands:
         filenames = list(channel_dirs[0].glob(f'EEG/{band}{rec_files}.mat'))
+        assert len(filenames) == len(rec_files)
         metadata = mat_loader.run_conversion(filenames[0], rec_files[0], 'scipy')
         filter_descript = f"{band} {' '.join(''.join(metadata.descript).split())}"
         descript = "\n".join([descript, filter_descript])
@@ -313,7 +325,7 @@ def get_lfp_decomposition(channel_dirs, mat_loader, rec_files, lfp_ts, metric, u
 
     # create data iterator
     dim_names = [f'EEG/{band}' for band in freq_bands]
-    data = MultiDimMultiFileArrayIterator(channel_dirs, dim_names, mat_loader, recs, num_samples, metric_row)
+    data = MultiDimMultiFileArrayIterator(channel_dirs, dim_names, mat_loader, rec_files, num_samples, metric_row)
 
     # add electrical series to NWB file
     decomp_series = DecompositionSeries(name=f'decomposition_{metric}',
@@ -323,7 +335,8 @@ def get_lfp_decomposition(channel_dirs, mat_loader, rec_files, lfp_ts, metric, u
                                         rate=float(samp_rate),
                                         source_timeseries=lfp_ts,
                                         description=descript,
-                                        units=units)
+                                        unit=units,
+                                        comments=f'includes original 1-based recording file numbers: {rec_files}')
 
     # add info about frequency bands and limits
     for band, lim in zip(freq_bands, limits):
@@ -348,7 +361,7 @@ def get_ripple_channel(ripple_chan_filename, nwbfile, mat_loader):
     return ripple_channel_data
 
 
-def get_lfp_events(processed_data_folder, br, channel, rec_durations, mat_loader):
+def get_lfp_events(processed_data_folder, br, channel, rec_durations, mat_loader, rec_files):
     signal_bands = ['thetas', 'nonthetas', 'ripples']
     lfp_events = dict.fromkeys(signal_bands)
     for band in signal_bands:
@@ -362,8 +375,14 @@ def get_lfp_events(processed_data_folder, br, channel, rec_durations, mat_loader
                        'start_ind': 'index of start time in lfp timeseries',
                        'stop_ind': 'index of stop time in lfp timeseries',
                        'mid_ind': 'index of middle time in lfp timeseries',
-                       'energy': '', 'peak': '', 'max_thresh': '',  # TODO - add accurate descriptions of these values
-                       'baseline': '', 'threshold': '', 'std': '', 'min_duration': '', 'excluded': ''}
+                       'energy': 'total sum squared energy of the waveform',
+                       'peak': 'peak height/energy of the waveform',
+                       'max_thresh': 'the largest threshold in stdev units at which this ripple would be detected',
+                       'baseline': 'baseline value for event detection',
+                       'threshold': 'baseline value with X number of std above the mean for event detection',
+                       'std': 'standard deviation value used to generate threshold value',
+                       'min_duration': 'time (in seconds) signal must be above threshold for event detection',
+                       'excluded': 'any post-event detection exclusion criteria applied'}
         for key, value in column_dict.items():
             try:
                 events.add_column(name=key, description=value)
@@ -372,6 +391,7 @@ def get_lfp_events(processed_data_folder, br, channel, rec_durations, mat_loader
 
         # loop through files to add events
         filenames = list((processed_data_folder / br / str(channel)).glob(f'{band}{rec_files}.mat'))
+        assert len(filenames) == len(rec_files)
         duration = 0.0
         for ind, file in enumerate(filenames):
             # load up the data
@@ -435,8 +455,9 @@ def get_analog_timeseries(nwbfile, data_folder, mat_loader, rec_files):
     for name, chan in analog_chan_dict.items():
         # concatenate analog signal across recordings
         analog_filenames = list(data_folder.glob(f'{name}{rec_files}.mat'))
+        assert len(analog_filenames) == len(rec_files)
         analog_data = mat_loader.run_conversion(analog_filenames, rec_files, 'concat_array')
-        metadata = mat_loader.run_conversion(analog_filenames[0], rec_files, 'scipy')
+        metadata = mat_loader.run_conversion(analog_filenames[0], rec_files[0], 'scipy')
 
         # generate electrodes and electrode region
         last_electrode = max(nwbfile.electrodes['id'])
@@ -458,7 +479,8 @@ def get_analog_timeseries(nwbfile, data_folder, mat_loader, rec_files):
                                             starting_time=0.0,
                                             rate=float(metadata.samprate),
                                             electrodes=elec_table_region,
-                                            description=analog_descript_dict[name])
+                                            description=analog_descript_dict[name],
+                                            comments=f'includes original 1-based recording file numbers: {rec_files}')
     return analog_obj
 
 
@@ -476,6 +498,7 @@ def get_digital_events(data_folder, rec_durations, mat_loader, rec_files):
 
         # get event times from all files adjusted for time
         digital_filenames = list(data_folder.glob(f'{name}{rec_files}.mat'))
+        assert len(digital_filenames) == len(rec_files)
         all_on_times = []
         all_off_times = []
         duration = 0.0
@@ -493,7 +516,7 @@ def get_digital_events(data_folder, rec_durations, mat_loader, rec_files):
                 # clean up times for start and end of file
                 if matin.state[0] == 0:  # if first value is off, remove first off sample
                     off_samples = off_samples[1:]
-                elif matin.state[0] == 1:  # if first value is on, remove first on+off sample bc we don't know actual start
+                elif matin.state[0] == 1:  # if first value is on, remove first on+off sample bc don't know actual start
                     on_samples = on_samples[1:]
                     off_samples = off_samples[1:]
 
