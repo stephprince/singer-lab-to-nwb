@@ -35,25 +35,17 @@ class SingerLabNWBConverter(NWBConverter):
     def get_metadata(self):
         metadata = super().get_metadata()
 
-        # get session info
-        synced_file_path = self.data_interface_objects['VirmenData'].source_data['synced_file_path']
-        synced_files = list(Path(synced_file_path).glob('virmenDataSynced*.csv'))
-        if synced_files:
-            session_info = self.data_interface_objects['VirmenData'].source_data['ephys_session_info']
-            date_of_birth = datetime.strptime(str(session_info['DOB'].values[0]), '%y%m%d')
-            date_of_recording = datetime.strptime(str(session_info['Date'].values[0]), '%y%m%d')
-            age = f'{(date_of_recording - date_of_birth).days} days'
-        else:  # if there's no ephys data, give approximate value (could add details later)
-            age = '2-7 months'
+        # add subject info from session info
+        session_info = [v.source_data['session_info'] for k, v in self.data_interface_objects.items()
+                        if 'session_info' in v.source_data]
+        session_info = session_info[0]
 
-        # add subject info
-        session_id = self.data_interface_objects['VirmenData'].source_data['session_id']
-        virmen_base_path = Path(self.data_interface_objects['VirmenData'].source_data['file_path'])
-        virmen_file_paths = list(virmen_base_path.glob(f'{session_id}*/virmenDataRaw.mat'))
-        session_data = convert_mat_file_to_dict(mat_file_name=virmen_file_paths[0])
-        virmen_df = pd.DataFrame(session_data['virmenData']['data'], columns=session_data['virmenData']['dataHeaders'])
-        virmen_time = virmen_df["time"].apply(lambda x: matlab_time_to_datetime(x))
-        subject_id = session_data['virmenData']["sessioninfo"]
+        subject_id = f"{session_info['ID'].values[0]}{session_info['Animal'].values[0]}"
+        session_id = f"{subject_id}_{session_info['Date'].values[0]}"
+        date_of_birth = datetime.strptime(str(session_info['DOB'].values[0]), '%y%m%d')
+        date_of_recording = datetime.strptime(str(session_info['Date'].values[0]), '%y%m%d')
+        age = f'{(date_of_recording - date_of_birth).days} days'
+
         metadata.update(
             Subject=dict(
                 subject_id=subject_id,
@@ -76,9 +68,14 @@ class SingerLabNWBConverter(NWBConverter):
             file_creation_time = datetime.utcfromtimestamp(int(time_data['system_time_at_creation']) / 1e3)  # convert from ms to s
             samples_before_start = int(time_data['first_timestamp']) - int(time_data['timestamp_at_creation'])
             session_start_time = file_creation_time + timedelta(seconds=samples_before_start/int(time_data['clockrate']))
-        else:  # otherwise use behavioral data
+        elif 'VirmenData' in self.data_interface_objects:  # otherwise use behavioral data
+            virmen_base_path = Path(self.data_interface_objects['VirmenData'].source_data['file_path'])
+            virmen_file_paths = list(virmen_base_path.glob(f'{session_id}*/virmenDataRaw.mat'))
+            session_data = convert_mat_file_to_dict(mat_file_name=virmen_file_paths[0])
+            virmen_df = pd.DataFrame(session_data['virmenData']['data'],
+                                     columns=session_data['virmenData']['dataHeaders'])
+            virmen_time = virmen_df["time"].apply(lambda x: matlab_time_to_datetime(x))
             session_start_time = virmen_time[0]
-        assert session_start_time >= virmen_time[0], 'Invalid setup: behavior data occurs before session start time'
 
         # get git version
         repo = Repo(search_parent_directories=True)

@@ -29,7 +29,7 @@ for name, session in unique_sessions:
         VirmenData=dict(file_path=str(file_paths["virmen"]),
                         session_id=file_paths["session_id"],
                         synced_file_path=str(file_paths["processed_ephys"]),
-                        ephys_session_info=session),
+                        session_info=session),
         PreprocessedData=dict(processed_data_folder=str(file_paths["processed_ephys"]),
                               raw_data_folder=str(file_paths['raw_ephys']),
                               channel_map_path=str(file_paths["channel_map"]),

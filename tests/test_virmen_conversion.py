@@ -32,7 +32,7 @@ def nwbfile(file_paths, session_info):
     source_data = dict(VirmenData=dict(file_path=str(file_paths["virmen"]),
                                        session_id=file_paths["session_id"],
                                        synced_file_path=str(file_paths["processed_ephys"]),
-                                       ephys_session_info=session_info))
+                                       session_info=session_info))
     converter = SingerLabNWBConverter(source_data=source_data)
     metadata = converter.get_metadata()
     converter.run_conversion(nwbfile_path=str(nwbfilename), metadata=metadata, overwrite=True)

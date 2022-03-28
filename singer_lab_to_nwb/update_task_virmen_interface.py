@@ -176,8 +176,8 @@ class UpdateTaskVirmenInterface(BaseDataInterface):
         virmen_df_list = []
         if self.source_data['synced_file_path']:  # if there exists ephys data, use that
             base_path = Path(self.source_data['synced_file_path'])
-            recs = self.source_data['ephys_session_info'][['Recording']].values.squeeze().tolist()
-            behavior_recs = self.source_data['ephys_session_info'][['Behavior']].values.squeeze().tolist()
+            recs = self.source_data['session_info'][['Recording']].values.squeeze().tolist()
+            behavior_recs = self.source_data['session_info'][['Behavior']].values.squeeze().tolist()
 
             virmen_files = list(base_path.glob(f'virmenDataSynced{recs}.csv'))
             assert sum(behavior_recs) == len(virmen_files), 'Number of virmen files does not match expected number of ' \
@@ -193,7 +193,8 @@ class UpdateTaskVirmenInterface(BaseDataInterface):
             base_path = Path(self.source_data['file_path'])
             virmen_files = list(base_path.glob(f'{session_id}*/virmenDataRaw.mat'))
 
-            behavior_recs = self.source_data['ephys_session_info'][['Behavior']].values.squeeze().tolist()
+            behavior_recs = self.source_data['' \
+                                             ''][['Behavior']].values.squeeze().tolist()
             assert sum(behavior_recs) == len(virmen_files), 'Number of virmen files does not match expected number of ' \
                                                      'behavior sessions '
 
@@ -209,7 +210,7 @@ class UpdateTaskVirmenInterface(BaseDataInterface):
         if self.source_data['synced_file_path']:  # if there exists ephys data, use that
             # get base file paths
             base_path = Path(self.source_data['synced_file_path'])
-            recs = self.source_data['ephys_session_info'][['Recording']].values.squeeze().tolist()
+            recs = self.source_data['session_info'][['Recording']].values.squeeze().tolist()
             all_eeg_files = list(base_path.glob(f'CA1/0/eeg{recs}.mat'))
             virmen_files = list(base_path.glob(f'virmenDataSynced{recs}.csv'))
             virmen_recs = [int(path.stem[-1]) for path in virmen_files]
