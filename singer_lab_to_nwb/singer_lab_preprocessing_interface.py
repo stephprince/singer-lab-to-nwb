@@ -410,9 +410,11 @@ def get_lfp_events(processed_data_folder, br, channel, rec_durations, mat_loader
                 elif (field in ['starttime', 'endtime', 'midtime']) and (
                         field_data is not np.nan):  # catch for structures that only have start ind and not time
                     field_data = field_data + rec_durations['start_time'][ind]
+                    assert np.max(field_data) < rec_durations['stop_time'][ind], 'Event times not within recording duration'
                 elif (field in ['starttime', 'endtime', 'midtime']) and (field_data is np.nan):
                     base_field = field.replace('time', 'ind')
                     field_data = (getattr(matin, base_field) / samp_rate) + rec_durations['start_time'][ind]
+                    assert np.max(field_data) < rec_durations['stop_time'][ind], 'Event times not within recording duration'
 
                 if np.size(field_data) < num_events:  # resize if there is only one value
                     field_data = [field_data] * num_events
@@ -444,9 +446,11 @@ def get_analog_timeseries(nwbfile, data_folder, mat_loader, rec_files):
                                            'values of -10 and 10V',
                             'transVelocity': 'movement of the spherical treadmill along the pitch axis as measured by '
                                              'an optical gaming mouse and filtered through a lab view function, maximum'
-                                             ' values of -10 and 10V'}
+                                             ' values of -10 and 10V',}
     analog_chan_dict = {'licks': 1, 'rotVelocity': 2, 'transVelocity': 4}  # TODO - have this as a project input
-
+    analog_chan_new_names = {'licks': 'licks',
+                             'rotVelocity': 'translational_velocity',
+                             'transVelocity': 'rotational_velocity'}  # TODO - fix this on the preprocessing side
     # look through signals and generate electrical series
     analog_obj = dict.fromkeys(analog_descript_dict.keys())
     for name, chan in analog_chan_dict.items():
@@ -471,7 +475,7 @@ def get_analog_timeseries(nwbfile, data_folder, mat_loader, rec_files):
                                                                   description=f'{metadata.descript} {name}')
 
         # general electrical series objects
-        analog_obj[name] = ElectricalSeries(name=name,
+        analog_obj[name] = ElectricalSeries(name=analog_chan_new_names[name],
                                             data=H5DataIO(analog_data, compression='gzip'),
                                             starting_time=0.0,
                                             rate=float(metadata.samprate),
@@ -504,7 +508,7 @@ def get_digital_events(data_folder, rec_durations, mat_loader, rec_files):
             samp_rate = float(matin.samprate)
 
             # get periods where digital channel is ON
-            start_time = float(matin.start_time)
+            start_time = float(matin.all_timestamps[0]/matin.samprate)
             if not isinstance(matin.state, int):  # check if there's only one value then no signals acquired
                 on_samples = [matin.data[ind] for ind, state in enumerate(matin.state) if state == 1]
                 off_samples = [matin.data[ind] for ind, state in enumerate(matin.state) if state == 0]
@@ -526,6 +530,9 @@ def get_digital_events(data_folder, rec_durations, mat_loader, rec_files):
                 # append to list and adjust for duration
                 all_on_times.extend(on_times + rec_durations['start_time'][ind])  # adjust for durations up to that point
                 all_off_times.extend(off_times + rec_durations['start_time'][ind])  # adjust for durations up to that point
+
+                assert max(all_on_times) < rec_durations['stop_time'][ind], 'Event times not within recording duration'
+                assert max(all_off_times) < rec_durations['stop_time'][ind], 'Event times not within recording duration'
 
         # make time intervals structure for each signal
         digital_obj[name] = TimeIntervals(name=name, description=dig_descript_dict[name])
