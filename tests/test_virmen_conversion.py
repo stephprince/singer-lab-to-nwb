@@ -6,9 +6,8 @@ from pathlib import Path
 from pynwb import NWBHDF5IO
 
 from singer_lab_nwb_converter import SingerLabNWBConverter
-from update_task_conversion_utils import get_file_paths, get_session_info
 from mat_conversion_utils import matlab_time_to_datetime
-
+from update_task_conversion_utils import get_file_paths, get_session_info
 
 # set up fixtures
 @pytest.fixture(scope="module")

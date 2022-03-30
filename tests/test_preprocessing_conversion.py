@@ -9,12 +9,11 @@ from singer_lab_mat_loader import SingerLabMatLoader
 from singer_lab_nwb_converter import SingerLabNWBConverter
 from update_task_conversion_utils import get_file_paths, get_session_info
 
-
 # set up fixtures
 @pytest.fixture(scope="module")
 def file_paths():
     base_path = Path("Y:/singer/Steph/Code/singer-lab-to-nwb/data/")
-    return get_file_paths(base_path, "S25_210913")  # TODO - takes a while to load, need a better test file
+    return get_file_paths(base_path, "S25_210913")
 
 
 @pytest.fixture(scope="module")
