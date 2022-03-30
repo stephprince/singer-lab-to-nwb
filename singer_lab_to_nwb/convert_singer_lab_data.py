@@ -23,8 +23,9 @@ for name, session in unique_sessions:
     brain_regions = session[['RegAB', 'RegCD']].values[0]
     file_paths = get_file_paths(base_path, session_id)
 
-    # add source data
+    # add source data and conversion options
     stub_test = False
+    skip_decomposition = True
     source_data = dict(
         VirmenData=dict(file_path=str(file_paths["virmen"]),
                         session_id=file_paths["session_id"],
@@ -35,11 +36,20 @@ for name, session in unique_sessions:
                               channel_map_path=str(file_paths["channel_map"]),
                               session_info=session))
 
+    conversion_options = dict(PreprocessedData=dict(stub_test=stub_test,
+                                                    skip_decomposition=skip_decomposition), )
+
     for br in brain_regions:
         phy_path = file_paths["processed_ephys"] / br / file_paths["kilosort"]
         source_data[f'PhySorting{br}'] = dict(folder_path=str(phy_path), exclude_cluster_groups=["noise", "mua"])
+        conversion_options[f'PhySorting{br}'] = dict(stub_test=stub_test)
+
+
 
     # run the conversion process
     converter = SingerLabNWBConverter(source_data=source_data)
     metadata = converter.get_metadata()
-    converter.run_conversion(nwbfile_path=file_paths["nwbfile"], metadata=metadata, overwrite=True)
+    converter.run_conversion(nwbfile_path=file_paths["nwbfile"],
+                             metadata=metadata,
+                             conversion_options=conversion_options,
+                             overwrite=True)

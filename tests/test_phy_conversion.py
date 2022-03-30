@@ -44,7 +44,7 @@ def nwbfile(file_paths, brain_regions):
     metadata = converter.get_metadata()
     converter.run_conversion(nwbfile_path=str(nwbfilename),
                              metadata=metadata,
-                             #conversion_options=conversion_options,
+                             conversion_options=conversion_options,
                              overwrite=True)
 
     io = NWBHDF5IO(str(nwbfilename), 'r')
