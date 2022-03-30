@@ -1,7 +1,7 @@
 """Authors: Ben Dichter, Cody Baker."""
-
+import mat73
 import numpy as np
-from datetime import datetime
+from datetime import timedelta, datetime
 from scipy.io import loadmat, matlab
 from collections import Iterable
 
@@ -53,7 +53,11 @@ def convert_mat_file_to_dict(mat_file_name):
     It calls a recursive function to convert all entries
     that are still matlab objects to dictionaries.
     """
-    data = loadmat(mat_file_name, struct_as_record=False, squeeze_me=True)
+    try:
+        data = loadmat(mat_file_name, struct_as_record=False, squeeze_me=True)
+    except NotImplementedError:
+        data = mat73.loadmat(mat_file_name)
+
     for key in data:
         if isinstance(data[key], matlab.mio5_params.mat_struct):
             data[key] = mat_obj_to_dict(data[key])
@@ -98,3 +102,9 @@ def flatten_nested_dict(nested_dict):
             flatten_dict[k] = v
 
     return flatten_dict
+
+def matlab_time_to_datetime(series):
+    times = datetime.fromordinal(int(series)) + \
+            timedelta(days=series % 1) - \
+            timedelta(days=366)
+    return times
