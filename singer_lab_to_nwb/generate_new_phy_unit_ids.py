@@ -4,13 +4,13 @@ from phy_unit_id_generator import PhyUnitIDGenerator
 from update_task_conversion_utils import get_file_paths, get_session_info
 
 # set inputs
-animals = [17, 20, 25, 28, 29]
-dates_included = [210913]
+animals = [20, 25, 28, 29]
+dates_included = []
 dates_excluded = []
 probe_channels = 64
 
 # load session info
-base_path = Path("Y:/singer/Steph/Code/singer-lab-to-nwb/data")  # ALL file paths will be based on this base directory
+base_path = Path("Y:/singer")  # ALL file paths will be based on this base directory
 spreadsheet_filename = 'Y:/singer/Steph/Code/update-project/docs/metadata-summaries/VRUpdateTaskEphysSummary.csv'
 all_session_info = get_session_info(filename=spreadsheet_filename, animals=animals,
                                 dates_included=dates_included, dates_excluded=dates_excluded)
