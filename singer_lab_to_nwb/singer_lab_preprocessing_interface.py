@@ -108,7 +108,7 @@ class SingerLabPreprocessingInterface(BaseDataInterface):
 
         return metadata
 
-    def run_conversion(self, nwbfile: NWBFile, metadata: dict, stub_test: bool = False):
+    def run_conversion(self, nwbfile: NWBFile, metadata: dict, stub_test: bool = False, skip_decomposition: bool=False):
         """Primary conversion function for the custom Singer lab behavioral interface."""
         # get session info from the session info data frame
         session_info = self.source_data['session_info']
@@ -201,7 +201,7 @@ class SingerLabPreprocessingInterface(BaseDataInterface):
         nwbfile.processing['ecephys'].add(lfp_obj)
 
         # extract filtered lfp bands (beta, delta, theta, gamma, ripple)
-        if not stub_test:
+        if not stub_test and not skip_decomposition:
             lfp_ts = nwbfile.processing['ecephys']['LFP']['LFP']
             amp_obj = get_lfp_decomposition(channel_dirs, mat_loader, rec_files, lfp_ts, 'amplitude', 'uV')
             phase_obj = get_lfp_decomposition(channel_dirs, mat_loader, rec_files, lfp_ts, 'phase', 'degrees')
@@ -392,7 +392,6 @@ def get_lfp_events(processed_data_folder, br, channel, rec_durations, mat_loader
         # loop through files to add events
         filenames = list((processed_data_folder / br / str(channel)).glob(f'{band}{rec_files}.mat'))
         assert len(filenames) == len(rec_files)
-        duration = 0.0
         for ind, file in enumerate(filenames):
             # load up the data
             matin = mat_loader.run_conversion(file, file.stem.strip(band), 'scipy')
@@ -407,13 +406,13 @@ def get_lfp_events(processed_data_folder, br, channel, rec_durations, mat_loader
                 field_data = getattr(matin, field, np.nan)  # set default to nan if missing
 
                 if field in ['startind', 'endind', 'midind']:
-                    field_data = field_data + (duration * samp_rate)
+                    field_data = field_data + (rec_durations['start_time'][ind] * samp_rate)
                 elif (field in ['starttime', 'endtime', 'midtime']) and (
                         field_data is not np.nan):  # catch for structures that only have start ind and not time
-                    field_data = field_data + duration
+                    field_data = field_data + rec_durations['start_time'][ind]
                 elif (field in ['starttime', 'endtime', 'midtime']) and (field_data is np.nan):
                     base_field = field.replace('time', 'ind')
-                    field_data = (getattr(matin, base_field) / samp_rate) + duration
+                    field_data = (getattr(matin, base_field) / samp_rate) + rec_durations['start_time'][ind]
 
                 if np.size(field_data) < num_events:  # resize if there is only one value
                     field_data = [field_data] * num_events
@@ -429,8 +428,6 @@ def get_lfp_events(processed_data_folder, br, channel, rec_durations, mat_loader
             event_dict = event_df.to_dict('records')
             for e in event_dict:
                 events.add_row(e)
-
-            duration = duration + rec_durations['stop_time'][ind]
 
         # add to output data structure
         lfp_events[band] = events
@@ -501,7 +498,6 @@ def get_digital_events(data_folder, rec_durations, mat_loader, rec_files):
         assert len(digital_filenames) == len(rec_files)
         all_on_times = []
         all_off_times = []
-        duration = 0.0
         for ind, file in enumerate(digital_filenames):
             # load up the data
             matin = mat_loader.run_conversion(file, file.stem.strip(name), 'scipy')
@@ -528,10 +524,8 @@ def get_digital_events(data_folder, rec_durations, mat_loader, rec_files):
                 off_times = (np.array(off_samples) / samp_rate) - start_time  # in seconds
 
                 # append to list and adjust for duration
-                all_on_times.extend(on_times + duration)  # adjust for durations up to that point
-                all_off_times.extend(off_times + duration)  # adjust for durations up to that point
-
-            duration = duration + rec_durations['stop_time'][ind]
+                all_on_times.extend(on_times + rec_durations['start_time'][ind])  # adjust for durations up to that point
+                all_off_times.extend(off_times + rec_durations['start_time'][ind])  # adjust for durations up to that point
 
         # make time intervals structure for each signal
         digital_obj[name] = TimeIntervals(name=name, description=dig_descript_dict[name])
