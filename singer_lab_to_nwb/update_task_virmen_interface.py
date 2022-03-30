@@ -149,7 +149,7 @@ class UpdateTaskVirmenInterface(BaseDataInterface):
         i_delays, t_delays, loc_delays = get_task_event_times(virmen_df, delays, trial_starts, trial_ends,
                                                               timestamps)
         i_updates, t_updates, loc_updates = get_task_event_times(virmen_df, updates, trial_starts, trial_ends,
-                                                              timestamps)
+                                                                 timestamps)
         i_delays2, t_delays2, loc_delays2 = get_task_event_times(virmen_df, delays, trial_starts, trial_ends,
                                                                  timestamps, event_ind=1)
         i_choices, t_choices, loc_choices = get_task_event_times(virmen_df, choices, trial_starts, trial_ends,
@@ -186,7 +186,7 @@ class UpdateTaskVirmenInterface(BaseDataInterface):
             # load up csv files
             for files in virmen_files:
                 virmen_df = pd.read_csv(files)
-                virmen_df.dropna(subset=['spikeGadgetsTimes'], inplace=True) # remove data w/o corresponding ephys data
+                virmen_df.dropna(subset=['spikeGadgetsTimes'], inplace=True)  # remove data w/o corresponding ephys data
                 virmen_df_list.append(virmen_df)
 
         else:  # otherwise use behavioral data
@@ -196,7 +196,7 @@ class UpdateTaskVirmenInterface(BaseDataInterface):
             behavior_recs = self.source_data['' \
                                              ''][['Behavior']].values.squeeze().tolist()
             assert sum(behavior_recs) == len(virmen_files), 'Number of virmen files does not match expected number of ' \
-                                                     'behavior sessions '
+                                                            'behavior sessions '
 
             # load up mat files
             for files in virmen_files:
@@ -229,10 +229,12 @@ class UpdateTaskVirmenInterface(BaseDataInterface):
             # calculate timestamps of virmen data based on these samples and durations
             sg_samp_rate = eeg_mat.samprate * eeg_mat.downsample
             timestamps = []
-            virmen_recs_0_based = [int(r)-1 for r in virmen_recs]  # adjust by 1 because 0-based indexing vs. file names
+            virmen_recs_0_based = [int(r) - 1 for r in
+                                   virmen_recs]  # adjust by 1 because 0-based indexing vs. file names
             for df, rec in zip(virmen_df_list, virmen_recs_0_based):
                 sg_samples = df["spikeGadgetsTimes"]
-                sg_time_elapsed = (sg_samples - sg_start_samples[rec])/sg_samp_rate  # since 1st ephys sample of that rec
+                sg_time_elapsed = (sg_samples - sg_start_samples[
+                    rec]) / sg_samp_rate  # since 1st ephys sample of that rec
                 sg_time_elapsed = sg_time_elapsed + sg_start_times[rec]  # adjust for any previous recordings
 
                 timestamps.append(sg_time_elapsed)
@@ -246,6 +248,7 @@ class UpdateTaskVirmenInterface(BaseDataInterface):
                 timestamps.append(time_elapsed)
 
         return timestamps
+
 
 def create_behavioral_time_series(df, timestamps):
     # make time object
@@ -271,22 +274,22 @@ def create_behavioral_time_series(df, timestamps):
 
     # make velocity objects
     trans_velocity_obj = TimeSeries(name='translational_velocity',
-                                        data=df['transVeloc'].values,
-                                        description='forward and backwards velocity in the virtual reality '
-                                                    'environment. The pitch axis as tracked by the optical '
-                                                    'mouse.',
-                                        unit='au',
-                                        resolution=np.nan,
-                                        timestamps=H5DataIO(timestamps, compression="gzip")
-                                        )
+                                    data=df['transVeloc'].values,
+                                    description='forward and backwards velocity in the virtual reality '
+                                                'environment. The pitch axis as tracked by the optical '
+                                                'mouse.',
+                                    unit='au',
+                                    resolution=np.nan,
+                                    timestamps=H5DataIO(timestamps, compression="gzip")
+                                    )
     rot_velocity_obj = TimeSeries(name='rotational_velocity',
-                                     data=H5DataIO(df['rotVeloc'].values, compression="gzip"),
-                                     description='sideways velocity in the virtual reality environment. The '
-                                                 'roll axis as tracked by the optical mouse.',
-                                     unit='au',
-                                     resolution=np.nan,
-                                     timestamps=H5DataIO(timestamps, compression="gzip")
-                                     )
+                                  data=H5DataIO(df['rotVeloc'].values, compression="gzip"),
+                                  description='sideways velocity in the virtual reality environment. The '
+                                              'roll axis as tracked by the optical mouse.',
+                                  unit='au',
+                                  resolution=np.nan,
+                                  timestamps=H5DataIO(timestamps, compression="gzip")
+                                  )
 
     # make view angle object
     view_angle_obj = CompassDirection(name="view_angle")
@@ -301,6 +304,7 @@ def create_behavioral_time_series(df, timestamps):
     view_angle_obj.add_spatial_series(view_angle)
 
     return time, pos_obj, trans_velocity_obj, rot_velocity_obj, view_angle_obj
+
 
 def create_behavioral_events(df, timestamps):
     # make lick object
@@ -329,6 +333,7 @@ def create_behavioral_events(df, timestamps):
 
     return lick_obj, reward_obj
 
+
 def get_task_event_times(df, events, trial_starts, trial_ends, timestamps, event_ind=0):
     # indices of delay, update, and choice events
     i_events = []
@@ -343,4 +348,3 @@ def get_task_event_times(df, events, trial_starts, trial_ends, timestamps, event
     loc_events = [df['yPos'][i] if i is not np.nan else i for i in i_events]
 
     return i_events, t_events, loc_events
-
