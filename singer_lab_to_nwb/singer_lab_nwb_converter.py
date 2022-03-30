@@ -38,13 +38,21 @@ class SingerLabNWBConverter(NWBConverter):
         # add subject info from session info
         session_info = [v.source_data['session_info'] for k, v in self.data_interface_objects.items()
                         if 'session_info' in v.source_data]
-        session_info = session_info[0]
+        if session_info:
+            session_info = session_info[0]
 
-        subject_id = f"{session_info['ID'].values[0]}{session_info['Animal'].values[0]}"
-        session_id = f"{subject_id}_{session_info['Date'].values[0]}"
-        date_of_birth = datetime.strptime(str(session_info['DOB'].values[0]), '%y%m%d')
-        date_of_recording = datetime.strptime(str(session_info['Date'].values[0]), '%y%m%d')
-        age = f'{(date_of_recording - date_of_birth).days} days'
+            subject_id = f"{session_info['ID'].values[0]}{session_info['Animal'].values[0]}"
+            session_id = f"{subject_id}_{session_info['Date'].values[0]}"
+            date_of_birth = datetime.strptime(str(session_info['DOB'].values[0]), '%y%m%d')
+            date_of_recording = datetime.strptime(str(session_info['Date'].values[0]), '%y%m%d')
+            age = f'{(date_of_recording - date_of_birth).days} days'
+        else:
+            file_path = [v.source_data['folder_path'] for k, v in self.data_interface_objects.items()
+                         if 'folder_path' in v.source_data]
+            brain_regions = [k.split('PhySorting')[1] for k, v in self.data_interface_objects.items()]
+            session_id = Path(file_path[0].split(brain_regions[0])[0]).stem
+            subject_id = session_id.split('_')[0]
+            age = "nan"
 
         metadata.update(
             Subject=dict(
@@ -76,6 +84,8 @@ class SingerLabNWBConverter(NWBConverter):
                                      columns=session_data['virmenData']['dataHeaders'])
             virmen_time = virmen_df["time"].apply(lambda x: matlab_time_to_datetime(x))
             session_start_time = virmen_time[0]
+        else:
+            session_start_time = datetime(1970, 1, 1)  # default value
 
         # get git version
         repo = Repo(search_parent_directories=True)
@@ -93,14 +103,5 @@ class SingerLabNWBConverter(NWBConverter):
             source_script=f'File created with git repo {remote_url}/tree/{short_hash}',
             source_script_file_name=f'convert_singer_lab_data.py',
         )
-
-        # add spike sorting column info
-        spike_sorting_data = any([key for key in self.data_interface_objects if 'PhySorting' in key])
-        if spike_sorting_data:
-            metadata["Ecephys"]["UnitProperties"] = [dict(name='Amplitude', description='amplitude imported from phy'),
-                                                     dict(name='ContamPct', description='contampct imported from phy'),
-                                                     dict(name='KSLabel', description='auto-label (pre-curation)'),
-                                                     dict(name='ch', description='main channel of unit'),
-                                                     dict(name='sh', description='shank of probe that unit is on'),]
 
         return metadata
