@@ -33,7 +33,7 @@ class SingerLabMatLoader:
 
         # load matlab file
         matin = convert_mat_file_to_dict(str(filename[0]))
-        stem = filename[0].stem.strip(rec)  # strip digits related to recording
+        stem = filename[0].stem.strip(str(rec))  # strip digits related to recording
 
         try:  # catch for first file vs subsequent ones
             mat_obj = matin[stem][int(self.subject) - 1][int(self.date) - 1][int(rec) - 1]  # subtract because 0-based
