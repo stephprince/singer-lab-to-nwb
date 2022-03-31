@@ -449,8 +449,8 @@ def get_analog_timeseries(nwbfile, data_folder, mat_loader, rec_files):
                                              ' values of -10 and 10V',}
     analog_chan_dict = {'licks': 1, 'rotVelocity': 2, 'transVelocity': 4}  # TODO - have this as a project input
     analog_chan_new_names = {'licks': 'licks',
-                             'rotVelocity': 'translational_velocity',
-                             'transVelocity': 'rotational_velocity'}  # TODO - fix this on the preprocessing side
+                             'rotVelocity': 'rotational_velocity',
+                             'transVelocity': 'translational_velocity'}
     # look through signals and generate electrical series
     analog_obj = dict.fromkeys(analog_descript_dict.keys())
     for name, chan in analog_chan_dict.items():
