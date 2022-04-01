@@ -115,8 +115,8 @@ class SingerLabPreprocessingInterface(BaseDataInterface):
         subject_num = session_info['Animal'].values[0]
         session_date = session_info['Date'].values[0]
         brain_regions = session_info[['RegAB', 'RegCD']].values[0]
-        vr_files = session_info[['Behavior']].values.squeeze()
-        rec_files = session_info[['Recording']].values.squeeze().tolist()
+        vr_files = session_info['Behavior'].to_list()
+        rec_files = session_info['Recording'].to_list()
 
         mat_loader = SingerLabMatLoader(subject_num, session_date)
 
@@ -265,7 +265,7 @@ def get_recording_epochs(filenames, vr_files, mat_loader):
 
 def get_lfp(channel_dirs, mat_loader, rec_files, elec_table_region):
     # get metadata from first file (should be same for all)
-    filenames = list(channel_dirs[0].glob(f'eeg{rec_files}.mat'))
+    filenames = list(channel_dirs[0].glob(f'eeg{rec_files}.mat'))  # TODO - get raweeg too
     assert len(filenames) == len(rec_files)
     recs = [f.stem.strip('eeg') for f in filenames]
     metadata = mat_loader.run_conversion(filenames[0], recs[0], 'scipy')
@@ -404,6 +404,8 @@ def get_lfp_events(processed_data_folder, br, channel, rec_durations, mat_loader
                       'baseline', 'threshold', 'std', 'minimum_duration', 'excluderipples']
             for field in fields:
                 field_data = getattr(matin, field, np.nan)  # set default to nan if missing
+                if hasattr(field_data, 'any'):
+                    field_data = field_data if field_data.any() else np.nan  # if attr was there but empty, default nan
 
                 if field in ['startind', 'endind', 'midind']:
                     field_data = field_data + (rec_durations['start_time'][ind] * samp_rate)
@@ -414,12 +416,16 @@ def get_lfp_events(processed_data_folder, br, channel, rec_durations, mat_loader
                 elif (field in ['starttime', 'endtime', 'midtime']) and (field_data is np.nan):
                     base_field = field.replace('time', 'ind')
                     field_data = (getattr(matin, base_field) / samp_rate) + rec_durations['start_time'][ind]
-                    assert np.max(field_data) < rec_durations['stop_time'][ind], 'Event times not within recording duration'
+                    if hasattr(field_data, 'any'):
+                        field_data = field_data if field_data.any() else np.nan
+                    if field_data is not np.nan:
+                        assert np.max(field_data) <= rec_durations['stop_time'][ind], \
+                            'Event times not within recording duration'
 
                 if np.size(field_data) < num_events:  # resize if there is only one value
                     field_data = [field_data] * num_events
 
-                temp_data.append(field_data)
+                temp_data.append(field_data)  # TODO - convert all to float if not already
 
             # get values that are different across events
             event_data = np.array(temp_data).T

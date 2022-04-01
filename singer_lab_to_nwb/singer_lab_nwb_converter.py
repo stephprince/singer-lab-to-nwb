@@ -104,4 +104,10 @@ class SingerLabNWBConverter(NWBConverter):
             source_script_file_name=f'convert_singer_lab_data.py',
         )
 
+        # add spike sorting column info
+        spike_sorting_data = any([key for key in self.data_interface_objects if 'PhySorting' in key])
+        if spike_sorting_data:
+            metadata["Ecephys"]["UnitProperties"] = [dict(name='Amplitude', description='amplitude imported from phy'),
+                                                     dict(name='ContamPct', description='contampct imported from phy'),
+                                                     dict(name='KSLabel', description='auto-label (pre-curation)'),]
         return metadata
