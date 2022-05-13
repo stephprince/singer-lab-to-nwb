@@ -6,6 +6,7 @@ from readTrodesExtractedDataFile3 import readTrodesExtractedDataFile
 from pathlib import Path
 from datetime import datetime, timedelta
 
+from cell_explorer_custom_interface import CellExplorerCustomInterface
 from update_task_virmen_interface import UpdateTaskVirmenInterface
 from singer_lab_preprocessing_interface import SingerLabPreprocessingInterface
 from mat_conversion_utils import convert_mat_file_to_dict, matlab_time_to_datetime
@@ -23,6 +24,8 @@ class SingerLabNWBConverter(NWBConverter):
         PreprocessedData=SingerLabPreprocessingInterface,
         PhySortingCA1=PhySortingInterface,
         PhySortingPFC=PhySortingInterface,  # I feel like there must be a better way to implement but leaving for now
+        CellExplorer=CellExplorerCustomInterface,
+
     )
 
     def __init__(self, source_data):
@@ -107,7 +110,7 @@ class SingerLabNWBConverter(NWBConverter):
         # add spike sorting column info
         spike_sorting_data = any([key for key in self.data_interface_objects if 'PhySorting' in key])
         if spike_sorting_data:
-            metadata["Ecephys"]["UnitProperties"] = [dict(name='Amplitude', description='amplitude imported from phy'),
-                                                     dict(name='ContamPct', description='contampct imported from phy'),
-                                                     dict(name='KSLabel', description='auto-label (pre-curation)'),]
+            metadata["Ecephys"]["UnitProperties"].extend([dict(name='Amplitude', description='amplitude imported from phy'),
+                                                          dict(name='ContamPct', description='contampct imported from phy'),
+                                                          dict(name='KSLabel', description='auto-label (pre-curation)'),])
         return metadata

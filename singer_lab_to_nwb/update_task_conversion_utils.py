@@ -11,6 +11,7 @@ def get_file_paths(base_path, session_id):
     processed_ephys_path = base_path / "ProcessedData" / "UpdateTask" / session_id
     virmen_path = base_path / "Virmen Logs" / "UpdateTask"
     kilosort_path = Path("sorted/kilosort/new_unit_ids")
+    cell_explorer_path = processed_ephys_path / 'cellTypeClassification.mat'
     channel_map_path = Path("Y:/singer/Steph/Code/singer-lab-to-nwb/data/ProbeData/A2x32-Poly5-10mm-20s-200-100-RigC-ProbeMap.csv")
     nwbfile_path = str(base_path / "NWBData" / "UpdateTask" / f"{session_id}.nwb")
 
@@ -18,6 +19,7 @@ def get_file_paths(base_path, session_id):
                 processed_ephys=processed_ephys_path,
                 virmen=virmen_path,
                 kilosort=kilosort_path,
+                cell_explorer=cell_explorer_path,
                 channel_map=channel_map_path,
                 session_id=session_id,
                 nwbfile=nwbfile_path
