@@ -1,5 +1,4 @@
 """Authors: Ben Dichter, Cody Baker."""
-import mat73
 import numpy as np
 from datetime import timedelta, datetime
 from scipy.io import loadmat, matlab
@@ -53,10 +52,7 @@ def convert_mat_file_to_dict(mat_file_name):
     It calls a recursive function to convert all entries
     that are still matlab objects to dictionaries.
     """
-    try:
-        data = loadmat(mat_file_name, struct_as_record=False, squeeze_me=True)
-    except NotImplementedError:
-        data = mat73.loadmat(mat_file_name)
+    data = loadmat(mat_file_name, struct_as_record=False, squeeze_me=True)
 
     for key in data:
         if isinstance(data[key], matlab.mio5_params.mat_struct):
