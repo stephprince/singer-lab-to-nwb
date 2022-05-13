@@ -382,7 +382,8 @@ def get_lfp_events(processed_data_folder, br, channel, rec_durations, mat_loader
                        'threshold': 'baseline value with X number of std above the mean for event detection',
                        'std': 'standard deviation value used to generate threshold value',
                        'min_duration': 'time (in seconds) signal must be above threshold for event detection',
-                       'excluded': 'any post-event detection exclusion criteria applied'}
+                       #'excluded': 'any post-event detection exclusion criteria applied'
+                       }
         for key, value in column_dict.items():
             try:
                 events.add_column(name=key, description=value)
@@ -401,7 +402,7 @@ def get_lfp_events(processed_data_folder, br, channel, rec_durations, mat_loader
             # get values that occur for each event
             temp_data = []
             fields = ['starttime', 'endtime', 'midtime', 'startind', 'endind', 'midind', 'energy', 'peak', 'maxthresh',
-                      'baseline', 'threshold', 'std', 'minimum_duration', 'excluderipples']
+                      'baseline', 'threshold', 'std', 'minimum_duration', ] #'excluderipples']
             for field in fields:
                 field_data = getattr(matin, field, np.nan)  # set default to nan if missing
                 if hasattr(field_data, 'any'):
@@ -425,7 +426,9 @@ def get_lfp_events(processed_data_folder, br, channel, rec_durations, mat_loader
                 if np.size(field_data) < num_events:  # resize if there is only one value
                     field_data = [field_data] * num_events
 
-                temp_data.append(field_data)  # TODO - convert all to float if not already
+                field_data = field_data if isinstance(field_data, (np.ndarray, list)) else [field_data]
+                field_data_as_float = list(map(float, field_data))
+                temp_data.append(field_data_as_float)
 
             # get values that are different across events
             event_data = np.array(temp_data).T
