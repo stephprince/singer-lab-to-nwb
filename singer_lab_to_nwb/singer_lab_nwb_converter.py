@@ -112,5 +112,6 @@ class SingerLabNWBConverter(NWBConverter):
         if spike_sorting_data:
             metadata["Ecephys"]["UnitProperties"].extend([dict(name='Amplitude', description='amplitude imported from phy'),
                                                           dict(name='ContamPct', description='contampct imported from phy'),
-                                                          dict(name='KSLabel', description='auto-label (pre-curation)'),])
+                                                          dict(name='KSLabel', description='auto-label (pre phy curation)'),
+                                                 dict(name='quality', description='manual-label (post phy curation)')])
         return metadata
