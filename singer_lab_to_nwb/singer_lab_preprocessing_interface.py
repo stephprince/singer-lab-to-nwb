@@ -87,8 +87,8 @@ class SingerLabPreprocessingInterface(BaseDataInterface):
         ]
 
         electrode_group = [dict(
-            name=f'probe{n + 1}',
-            description=f'probe{n + 1} of NeuroNexus probes.  Channels 0-31 belong to shank 1 and channels 32-64 '
+            name=f'probe{n}',
+            description=f'probe{n} of NeuroNexus probes.  Channels 0-31 belong to shank 1 and channels 32-64 '
                         f'belong to shank 2',
             location=brain_regions[n],
             device='spikegadgets_mcu')
