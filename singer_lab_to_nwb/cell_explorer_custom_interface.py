@@ -22,7 +22,7 @@ class CellExplorerCustomInterface(BaseDataInterface):
                                     maxWaveformCh=dict(name='main_channel',
                                                        description='0-based recording channel with largest waveform'),
                                     phy_maxWaveformCh1=dict(name='main_channel_phy',
-                                                            description='1-based main recording channel from phy'),
+                                                            description='0-based main recording channel from phy'),
                                     trilat_x=dict(name='location_on_electrode_x',
                                                   description='x coordinate in um of unit on probe'),
                                     trilat_y=dict(name='location_on_electrode_y',
