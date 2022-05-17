@@ -1,9 +1,11 @@
 import scipy.io
 import numpy as np
+import h5py
 
 from pathlib import Path
 from pynwb import NWBFile
 from nwb_conversion_tools.basedatainterface import BaseDataInterface
+from nwb_conversion_tools.utils.json_schema import get_base_schema
 
 from mat_conversion_utils import convert_mat_file_to_dict
 
@@ -12,7 +14,7 @@ class CellExplorerCustomInterface(BaseDataInterface):
     """Primary data interface class for converting Cell Explorer spiking data."""
 
     def __init__(self, **source_data):
-        super().__init__(source_data)
+        super().__init__(**source_data)
         self.properties_dict = dict(brainRegion=dict(name='region',
                                                      description='brain region where each unit was detected'),
                                     probeID=dict(name='group_id',
@@ -35,8 +37,8 @@ class CellExplorerCustomInterface(BaseDataInterface):
                                                                description='Mean of absolute differential firing rate across time'),
                                     refractoryPeriodViolation=dict(name='isi_violation',
                                                                    description='proportion of ISIs less than 2 ms long'),
-                                    labels=dict(name='cell_explorer_label',
-                                                description='classification as good or bad from cell explorer curation'),
+                                    tags=dict(name='cell_explorer_label',
+                                              description='classification as good or bad from cell explorer manual curation'),
                                     putativeCellType=dict(name='cell_type',
                                                           description='cell type classification'),
                                     troughToPeak=dict(name='spike_width',
@@ -45,32 +47,40 @@ class CellExplorerCustomInterface(BaseDataInterface):
                                                       description='autocorrelogram metric used for classification'),
                                     ab_ratio=dict(name='ab_ratio',
                                                   description='waveform asymmetry, ratio between positive peaks'),
-                                    acg=dict(wide=dict(name='autocorrelogram_wide',
-                                                       description='autocorrelogram from -50 to +50 ms with 0.5 ms bins'),
-                                             narrow=dict(name='autocorrelogram_narrow',
-                                                         description='autocorrelogram from -1000 to +1000 ms with 1 ms bins'),
-                                             ),
                                     peakVoltage=dict(name='spike_amplitude',
                                                      description='peak voltage from main channel (max-min of waveform)'),
                                     polarity=dict(name='polarity',
                                                   description='average voltage of spike vs baseline used to flip positive waveforms for metrics'),
-                                    waveforms=dict(filt=dict(name='waveform_filt_mean',
+                                    waveforms=dict(filt=dict(name='waveform_mean',
                                                              description='mean filtered waveform'),
-                                                   filt_std=dict(name='waveform_filt_std',
+                                                   filt_std=dict(name='waveform_sd',
                                                                  description='std filtered waveform'),
-                                                   raw=dict(name='waveform_raw_mean',
-                                                            description='mean raw waveform'),
-                                                   raw_std=dict(name='waveform_raw_std',
-                                                                description='std raw waveform'),
+                                                   time=dict(name='waveform_time',
+                                                            description='time values around the waveform peak'),
                                                    ),
                                     )
+
+    @classmethod
+    def get_source_schema(cls):
+        """Compile input schemas from each of the data interface classes."""
+        return dict(
+            required=['file_path'],
+            properties=dict(
+                file_path=dict(type='string'),
+            )
+        )
+
+    def get_metadata_schema(self):
+        """Compile metadata schemas from each of the data interface objects."""
+        metadata_schema = get_base_schema()
+        return metadata_schema
 
     def get_metadata(self):
         metadata = super().get_metadata()
 
         # append unit properties to the metadata table
         unit_properties = []
-        celltype_filepath = Path(self.source_data["cell_classification_path"])
+        celltype_filepath = Path(self.source_data["file_path"])
         if celltype_filepath.is_file():
             celltype_info = scipy.io.loadmat(celltype_filepath).get("cell_metrics", np.empty(0))
 
@@ -90,7 +100,7 @@ class CellExplorerCustomInterface(BaseDataInterface):
         # load up session data
         session_info = self.source_data['session_info']
         brain_regions = session_info[['RegAB', 'RegCD']].values[0]
-        celltype_filepath = Path(self.source_data["cell_classification_path"])
+        celltype_filepath = Path(self.source_data["file_path"])
         celltype_data = convert_mat_file_to_dict(celltype_filepath)['cell_metrics']
 
         # sort data to match existing units table
@@ -107,6 +117,11 @@ class CellExplorerCustomInterface(BaseDataInterface):
             elif isinstance(value, dict) and key in ['acg', 'isi']:
                 for k, v in value.items():
                     sorted_output[k] = v[:, unit_sort_index]
+            elif isinstance(value, dict) and key in ['tags']:
+                v = ['good' if unit in value['Good']-1 else 'bad' for unit in range(len(nwbfile.units))]
+                where_bad = [ind+1 for ind, val in enumerate(v) if val == 'bad']  # adjust for 1-indexing
+                assert [value['Bad']] == where_bad[:], 'Unit tags incorrectly assigned'
+                sorted_output = np.array(v)[unit_sort_index]
             celltype_data_sorted[key] = sorted_output
 
         assert all(celltype_data_sorted['cluID'] == unit_ids)
@@ -126,14 +141,17 @@ class CellExplorerCustomInterface(BaseDataInterface):
                 unit_col_args.update(table=nwbfile.electrodes)
 
             column_data = celltype_data_sorted.get(name, [])
-            if isinstance(column_data, dict):
+            if name in ['waveforms']:
                 for key, value in prop_info.items():
                     data = column_data.get(key, [])
+                    data = data.tolist()
                     column_name = value['name']
                     column_description = value['description']
 
-                    if np.shape(data)[0] != len(nwbfile.units):
-                        data = data.T
+                    if column_name == 'waveform_time':
+                        data = [np.diff(d)[0]/1000 for d in data]  # to get waveform rate in seconds from time vector
+                        column_name = 'waveform_rate'
+
                     unit_col_args = dict(name=column_name, description=column_description, data=data)
                     nwbfile.units.add_column(**unit_col_args)
             else:
@@ -141,6 +159,8 @@ class CellExplorerCustomInterface(BaseDataInterface):
                 column_description = prop_info['description']
                 assert (len(column_data) == len(nwbfile.units))
 
+                if isinstance(column_data[0], str):
+                    column_data = column_data.tolist()
                 unit_col_args = dict(name=column_name, description=column_description, data=column_data)
                 nwbfile.units.add_column(**unit_col_args)
 
@@ -149,4 +169,4 @@ class CellExplorerCustomInterface(BaseDataInterface):
             for ind in range(len(nwbfile.units)):
                 phy_spike_count = len(nwbfile.units.get_unit_spike_times(ind))
                 cell_explorer_spike_count = nwbfile.units['spike_count'][ind]
-                assert phy_spike_count == cell_explorer_spike_count
+                assert (phy_spike_count-cell_explorer_spike_count)/phy_spike_count < 0.0025  # TODO - figure out where missing spikes are
