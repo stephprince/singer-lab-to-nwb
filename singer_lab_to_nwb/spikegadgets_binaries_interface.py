@@ -98,7 +98,7 @@ class SpikeGadgetsBinariesInterface(BaseDataInterface):
         assert len(raw_filenames) == len(rec_files) * num_channels, "Number of files does not match expected number"
 
         # add electrode info
-        if not hasattr(nwbfile, 'electrode_group'):
+        if not hasattr(nwbfile, 'electrode_groups'):
             num_electrodes = 0
             for group in metadata['Ecephys']['ElectrodeGroup']:
                 # add device and electrode group if needed
@@ -141,7 +141,7 @@ def get_raw_timeseries(raw_data_folder, filenames, rec_files, elec_table_region)
                f'trodes_version: {metadata["trodes_version"]},' \
                f'conversion info: "conversion field accounts for voltage gain/scaling and uV to V conversion factor"'
     samp_rate = float(metadata['clockrate'])
-    conversion = float(metadata['voltage_scaling'])*0.001  # data in uV so multiply by 0.001 to get base units of volt
+    conversion = round(float(metadata['voltage_scaling'])*0.001, 10)  # data in uV so multiply by 0.001 to get base units of volt
 
     # create data iterator for channels x recordings
     n_samp_per_rec = get_recording_n_samples(raw_data_folder, rec_files)
@@ -149,7 +149,7 @@ def get_raw_timeseries(raw_data_folder, filenames, rec_files, elec_table_region)
     data = MultiFileSpikeGadgetsIterator(filenames, readTrodesExtractedDataFile, rec_files, n_channels, n_samp_per_rec)
 
     # add electrical series to NWB file
-    ecephys_ts = ElectricalSeries(name='raw_electrical_series',
+    ecephys_ts = ElectricalSeries(name='raw_ecephys',
                                   data=H5DataIO(data, compression='gzip'),
                                   starting_time=0.0,
                                   rate=samp_rate,

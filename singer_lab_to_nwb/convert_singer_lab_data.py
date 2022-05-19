@@ -4,8 +4,8 @@ from singer_lab_nwb_converter import SingerLabNWBConverter
 from update_task_conversion_utils import get_file_paths, get_session_info
 
 # set inputs
-animals = [20]  # all animals: 17, 20, 25, 28, 29
-dates_included = [210516]
+animals = [25]  # all animals: 17, 20, 25, 28, 29
+dates_included = [210913]
 dates_excluded = []
 
 # load session info
@@ -24,8 +24,8 @@ for name, session in unique_sessions:
     file_paths = get_file_paths(base_path, session_id)
 
     # add source data and conversion options
-    stub_test = True
-    skip_decomposition = True
+    stub_test = False
+    skip_decomposition = False
     source_data = dict(
         VirmenData=dict(file_path=str(file_paths["virmen"]),
                         session_id=file_paths["session_id"],

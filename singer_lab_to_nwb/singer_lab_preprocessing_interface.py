@@ -252,7 +252,7 @@ def get_electrical_series(channel_dirs, mat_loader, rec_files, signal_name, elec
 
     # general data interfaces as either as LFP or filtered ephys objects
     band_name = signal_info['name']
-    descript = f"{signal_descript} - {' '.join(''.join(metadata.descript).split())}"
+    descript = f"{signal_info['descript']} - {' '.join(''.join(metadata.descript).split())}"
     filter = ' '.join(''.join(metadata.filteringinfo).split())
     samp_rate = metadata.samprate
 

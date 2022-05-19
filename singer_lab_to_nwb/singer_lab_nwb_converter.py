@@ -27,7 +27,6 @@ class SingerLabNWBConverter(NWBConverter):
         PhySortingCA1=PhySortingInterface,
         PhySortingPFC=PhySortingInterface,  # I feel like there must be a better way to implement but leaving for now
         CellExplorer=CellExplorerCustomInterface,
-
     )
 
     def __init__(self, source_data):
