@@ -17,7 +17,7 @@ class CellExplorerCustomInterface(BaseDataInterface):
         super().__init__(**source_data)
         self.properties_dict = dict(brainRegion=dict(name='region',
                                                      description='brain region where each unit was detected'),
-                                    probeID=dict(name='group_id',
+                                    probeID=dict(name='electrode_group',
                                                  description='electrode group unit was identified on'),
                                     shankID=dict(name='shank_id',
                                                  description='electrode shank unit was identified on'),
@@ -137,8 +137,6 @@ class CellExplorerCustomInterface(BaseDataInterface):
 
         unit_col_args = dict()
         for name, prop_info in self.properties_dict.items():
-            if name in ['maxWaveformCh', 'phy_maxWaveformCh1', 'probeID'] and nwbfile.electrodes is not None:
-                unit_col_args.update(table=nwbfile.electrodes)
 
             column_data = celltype_data_sorted.get(name, [])
             if name in ['waveforms']:
@@ -150,7 +148,7 @@ class CellExplorerCustomInterface(BaseDataInterface):
 
                     if column_name == 'waveform_time':
                         data = [np.diff(d)[0]/1000 for d in data]  # to get waveform rate in seconds from time vector
-                        column_name = 'waveform_rate'
+                        column_name = 'waveform_rate_cell_explorer'
 
                     unit_col_args = dict(name=column_name, description=column_description, data=data)
                     nwbfile.units.add_column(**unit_col_args)
@@ -161,6 +159,10 @@ class CellExplorerCustomInterface(BaseDataInterface):
 
                 if isinstance(column_data[0], str):
                     column_data = column_data.tolist()
+
+                if name in ['probeID'] and nwbfile.electrodes is not None:  # convert electrode string to
+                    column_data = [nwbfile.electrode_groups[val] for val in column_data]
+
                 unit_col_args = dict(name=column_name, description=column_description, data=column_data)
                 nwbfile.units.add_column(**unit_col_args)
 
