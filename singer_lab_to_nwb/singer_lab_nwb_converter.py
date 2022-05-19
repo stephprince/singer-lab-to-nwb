@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from cell_explorer_custom_interface import CellExplorerCustomInterface
 from update_task_virmen_interface import UpdateTaskVirmenInterface
 from singer_lab_preprocessing_interface import SingerLabPreprocessingInterface
+from spikegadgets_binaries_interface import SpikeGadgetsBinariesInterface
 from mat_conversion_utils import convert_mat_file_to_dict, matlab_time_to_datetime
 
 
@@ -22,6 +23,7 @@ class SingerLabNWBConverter(NWBConverter):
     data_interface_classes = dict(
         VirmenData=UpdateTaskVirmenInterface,
         PreprocessedData=SingerLabPreprocessingInterface,
+        SpikeGadgetsData=SpikeGadgetsBinariesInterface,
         PhySortingCA1=PhySortingInterface,
         PhySortingPFC=PhySortingInterface,  # I feel like there must be a better way to implement but leaving for now
         CellExplorer=CellExplorerCustomInterface,

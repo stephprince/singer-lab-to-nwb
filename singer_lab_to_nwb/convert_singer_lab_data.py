@@ -24,17 +24,20 @@ for name, session in unique_sessions:
     file_paths = get_file_paths(base_path, session_id)
 
     # add source data and conversion options
-    stub_test = False
+    stub_test = True
     skip_decomposition = True
     source_data = dict(
-        # VirmenData=dict(file_path=str(file_paths["virmen"]),
-        #                 session_id=file_paths["session_id"],
-        #                 synced_file_path=str(file_paths["processed_ephys"]),
-        #                 session_info=session),
-        # PreprocessedData=dict(processed_data_folder=str(file_paths["processed_ephys"]),
-        #                       raw_data_folder=str(file_paths['raw_ephys']),
-        #                       channel_map_path=str(file_paths["channel_map"]),
-        #                       session_info=session),
+        VirmenData=dict(file_path=str(file_paths["virmen"]),
+                        session_id=file_paths["session_id"],
+                        synced_file_path=str(file_paths["processed_ephys"]),
+                        session_info=session),
+        PreprocessedData=dict(processed_data_folder=str(file_paths["processed_ephys"]),
+                              raw_data_folder=str(file_paths['raw_ephys']),
+                              channel_map_path=str(file_paths["channel_map"]),
+                              session_info=session),
+        SpikeGadgetsData=dict(raw_data_folder=str(file_paths['raw_ephys']),
+                              channel_map_path=str(file_paths["channel_map"]),
+                              session_info=session),
         CellExplorer=dict(file_path=str(file_paths['cell_explorer']),
                           session_info=session),)
 
@@ -44,7 +47,6 @@ for name, session in unique_sessions:
     # add source data for brain region specific data
     for br in brain_regions:
         phy_path = file_paths["processed_ephys"] / br / file_paths["kilosort"]
-        cell_info_spikes_path = phy_path.parent / f'{session_id}_{br}.spikes.cellinfo.mat'
         if phy_path.is_dir():
             source_data[f'PhySorting{br}'] = dict(folder_path=str(phy_path), exclude_cluster_groups=["noise", "mua"])
             conversion_options[f'PhySorting{br}'] = dict(stub_test=stub_test)
