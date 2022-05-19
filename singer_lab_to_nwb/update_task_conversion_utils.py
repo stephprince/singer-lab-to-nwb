@@ -66,3 +66,36 @@ def get_module(nwbfile, name, description=None):
         if description is None:
             description = name
         return nwbfile.create_processing_module(name, description)
+
+
+def get_spikegadgets_electrode_metadata(brain_regions, channel_groups):
+    spikegadgets = [dict(
+        name="spikegadgets_mcu",
+        description="Two NeuroNexus silicon probes with 2 (shanks) x 32 (channels) on each probe were inserted into"
+                    " hippocampal CA1 and medial prefrontal cortex. Probes were 64-chan, poly5 Takahashi probe "
+                    "formats. Electrophysiological data were acquired using a SpikeGadgets MCU system digitized "
+                    "with 30 kHz rate. Analog and digital channels were acquired using the SpikeGadgets ECU system."
+    ),
+        dict(name="spikegadgets_ecu",
+             description="Analog and digital inputs of SpikeGadgets system. Max -10 to 10V for analog channels.")
+    ]
+
+    electrode_group = [dict(
+        name=f'probe{n}',
+        description=f'probe{n} of NeuroNexus probes.  Channels 0-31 belong to shank 1 and channels 32-64 '
+                    f'belong to shank 2',
+        location=brain_regions[n],
+        device='spikegadgets_mcu')
+        for n, _ in enumerate(channel_groups)
+    ]
+    electrode_group.append(dict(
+        name='analog_inputs',
+        description='analog inputs to SpikeGadgets system. Channel IDs are unique to the project and task.',
+        location='none',
+        device='spikegadgets_ecu')
+    )
+
+    sg_electrode_dict = dict(Device=spikegadgets,
+                             ElectrodeGroup=electrode_group,)
+
+    return sg_electrode_dict
