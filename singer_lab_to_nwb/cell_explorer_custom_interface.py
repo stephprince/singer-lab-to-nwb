@@ -30,7 +30,9 @@ class CellExplorerCustomInterface(BaseDataInterface):
                                     trilat_y=dict(name='location_on_electrode_y',
                                                   description='y coordinate in um of unit on probe'),
                                     spikeCount=dict(name='spike_count',
-                                                    description='Spike count for entire session'),
+                                                    description='Spike count for entire session, cell explorer removes '
+                                                                'spikes within 0.5ms so this value will be smaller than'
+                                                                ' the length of the phy spike_times column'),
                                     firingRate=dict(name='firing_rate',
                                                     description='Spike count normalized by interval btwn first and last spike'),
                                     firingRateInstability=dict(name='firing_rate_instability',
@@ -171,4 +173,7 @@ class CellExplorerCustomInterface(BaseDataInterface):
             for ind in range(len(nwbfile.units)):
                 phy_spike_count = len(nwbfile.units.get_unit_spike_times(ind))
                 cell_explorer_spike_count = nwbfile.units['spike_count'][ind]
-                assert (phy_spike_count-cell_explorer_spike_count)/phy_spike_count < 0.0025  # TODO - figure out where missing spikes are
+                assert (phy_spike_count-cell_explorer_spike_count)/phy_spike_count < 0.01  # < 1% difference, see note
+                # NOTE: cell explorer removes spikes that are within 0.5 ms of each other.
+                # so the cell explorer spike count will always be less than the phy spike count
+                # this check exists more to verify that the units are being assigned correctly
