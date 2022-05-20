@@ -347,4 +347,4 @@ def get_task_event_times(df, events, trial_starts, trial_ends, timestamps, event
     # locations of delay and update events
     loc_events = [df['yPos'][i] if i is not np.nan else i for i in i_events]
 
-    return i_events, t_events, loc_events  # TODO - convert all to float if not already
+    return i_events, t_events, loc_events

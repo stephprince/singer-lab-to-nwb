@@ -243,7 +243,7 @@ def get_electrical_series(channel_dirs, mat_loader, rec_files, signal_name, elec
     signal_info = signal_dict[signal_name]
 
     # get metadata from first file (should be same for all)
-    filenames = list(channel_dirs[0].glob(f'{signal_name}{rec_files}.mat'))  # TODO - get raweeg too
+    filenames = list(channel_dirs[0].glob(f'{signal_name}{rec_files}.mat'))
     assert len(filenames) == len(rec_files)
     recs = [f.stem.strip(signal_name) for f in filenames]
     metadata = mat_loader.run_conversion(filenames[0], recs[0], 'scipy')
