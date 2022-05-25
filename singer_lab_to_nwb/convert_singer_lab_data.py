@@ -4,12 +4,12 @@ from singer_lab_nwb_converter import SingerLabNWBConverter
 from update_task_conversion_utils import get_file_paths, get_session_info
 
 # set inputs
-animals = [17, 20, 25, 28, 29]
-dates_included = [210913]
-dates_excluded = []
+animals = [17, 20, 25, 28, 29]  # all animals: 17, 20, 25, 28, 29
+dates_included = []
+dates_excluded = [210408]
 
 # load session info
-base_path = Path("Y:/singer/Steph/Code/singer-lab-to-nwb/data")  # ALL file paths will be based on this base directory
+base_path = Path("Y:/singer")  # ALL file paths will be based on this base directory
 spreadsheet_filename = 'Y:/singer/Steph/Code/update-project/docs/metadata-summaries/VRUpdateTaskEphysSummary.csv'
 all_session_info = get_session_info(filename=spreadsheet_filename, animals=animals,
                                 dates_included=dates_included, dates_excluded=dates_excluded)
@@ -25,7 +25,7 @@ for name, session in unique_sessions:
 
     # add source data and conversion options
     stub_test = False
-    skip_decomposition = True
+    skip_decomposition = False
     source_data = dict(
         VirmenData=dict(file_path=str(file_paths["virmen"]),
                         session_id=file_paths["session_id"],
@@ -34,17 +34,22 @@ for name, session in unique_sessions:
         PreprocessedData=dict(processed_data_folder=str(file_paths["processed_ephys"]),
                               raw_data_folder=str(file_paths['raw_ephys']),
                               channel_map_path=str(file_paths["channel_map"]),
-                              session_info=session))
+                              session_info=session),
+        SpikeGadgetsData=dict(raw_data_folder=str(file_paths['raw_ephys']),
+                              channel_map_path=str(file_paths["channel_map"]),
+                              session_info=session),
+        CellExplorer=dict(file_path=str(file_paths['cell_explorer']),
+                          session_info=session),)
 
     conversion_options = dict(PreprocessedData=dict(stub_test=stub_test,
                                                     skip_decomposition=skip_decomposition), )
 
+    # add source data for brain region specific data
     for br in brain_regions:
         phy_path = file_paths["processed_ephys"] / br / file_paths["kilosort"]
-        source_data[f'PhySorting{br}'] = dict(folder_path=str(phy_path), exclude_cluster_groups=["noise", "mua"])
-        conversion_options[f'PhySorting{br}'] = dict(stub_test=stub_test)
-
-
+        if phy_path.is_dir():
+            source_data[f'PhySorting{br}'] = dict(folder_path=str(phy_path), exclude_cluster_groups=["noise", "mua"])
+            conversion_options[f'PhySorting{br}'] = dict(stub_test=stub_test)
 
     # run the conversion process
     converter = SingerLabNWBConverter(source_data=source_data)

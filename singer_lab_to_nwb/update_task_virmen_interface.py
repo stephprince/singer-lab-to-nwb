@@ -18,9 +18,6 @@ from singer_lab_mat_loader import SingerLabMatLoader
 class UpdateTaskVirmenInterface(BaseDataInterface):
     """
     Data interface for virmen data acquired with the update task
-
-    See https://github.com/catalystneuro/tank-lab-to-nwb/blob/main/tank_lab_to_nwb/convert_towers_task/virmenbehaviordatainterface.py
-    for a good example to get started with as I build this
     """
 
     @classmethod
@@ -176,11 +173,11 @@ class UpdateTaskVirmenInterface(BaseDataInterface):
         virmen_df_list = []
         if self.source_data['synced_file_path']:  # if there exists ephys data, use that
             base_path = Path(self.source_data['synced_file_path'])
-            recs = self.source_data['session_info'][['Recording']].values.squeeze().tolist()
-            behavior_recs = self.source_data['session_info'][['Behavior']].values.squeeze().tolist()
+            recs = self.source_data['session_info']['Recording'].to_list()
+            behavior_recs = self.source_data['session_info']['Behavior'].to_list()
 
             virmen_files = list(base_path.glob(f'virmenDataSynced{recs}.csv'))
-            assert sum(behavior_recs) == len(virmen_files), 'Number of virmen files does not match expected number of ' \
+            assert np.sum(behavior_recs) == len(virmen_files), 'Number of virmen files does not match expected number of ' \
                                                             'behavior sessions '
 
             # load up csv files
@@ -212,18 +209,21 @@ class UpdateTaskVirmenInterface(BaseDataInterface):
             base_path = Path(self.source_data['synced_file_path'])
             recs = self.source_data['session_info'][['Recording']].values.squeeze().tolist()
             all_eeg_files = list(base_path.glob(f'CA1/0/eeg{recs}.mat'))
+            eeg_recs = [int(path.stem[-1]) for path in all_eeg_files]
             virmen_files = list(base_path.glob(f'virmenDataSynced{recs}.csv'))
             virmen_recs = [int(path.stem[-1]) for path in virmen_files]
             assert len(virmen_df_list) == len(virmen_recs), 'Number of virmen dataframes does not match number of recs'
 
             # get durations and start times of ALL recordings (including non-VR ones)
             start = 0.0  # initialize start time to 0 sec
-            sg_start_times = []  # spikegadgets start times
-            sg_start_samples = []  # spikegadgets start samples
+            sg_start_times = np.empty((np.max(eeg_recs)))  # will be accessed with 0-based rec number so fill with nan
+            sg_start_samples = np.empty((np.max(eeg_recs)))
+            sg_start_times.fill(np.nan)  # spikegadgets start times
+            sg_start_samples.fill(np.nan)  # spikegadgets start samples
             for file in all_eeg_files:
                 eeg_mat = mat_loader.run_conversion(file, file.stem[-1], 'scipy')
-                sg_start_times.append(start)
-                sg_start_samples.append(eeg_mat.time[0])
+                sg_start_times[int(file.stem[-1])-1] = start
+                sg_start_samples[int(file.stem[-1])-1] = eeg_mat.time[0]
                 start = start + (len(eeg_mat.time) / eeg_mat.samprate)  # get duration of each recording
 
             # calculate timestamps of virmen data based on these samples and durations
