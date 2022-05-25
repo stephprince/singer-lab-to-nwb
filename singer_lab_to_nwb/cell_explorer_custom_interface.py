@@ -122,7 +122,8 @@ class CellExplorerCustomInterface(BaseDataInterface):
             elif isinstance(value, dict) and key in ['tags']:
                 v = ['good' if unit in value['Good']-1 else 'bad' for unit in range(len(nwbfile.units))]
                 where_bad = [ind+1 for ind, val in enumerate(v) if val == 'bad']  # adjust for 1-indexing
-                assert [value['Bad']] == where_bad[:], 'Unit tags incorrectly assigned'
+                if 'Bad' in value:  # if not empty
+                    assert [value['Bad']] == where_bad[:], 'Unit tags incorrectly assigned'
                 sorted_output = np.array(v)[unit_sort_index]
             celltype_data_sorted[key] = sorted_output
 
