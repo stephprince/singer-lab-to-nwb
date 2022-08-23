@@ -6,11 +6,21 @@ This repository contains code for converting singer lab data to nwb format
 
 ## how to use
 
+To make a new conda environment
+```python
+conda create -n singer-lab-to-nwb python=3.9
+conda activate singer-lab-to-nwb
+```
+
 To install packages in development mode
 
 ```python
 cd /path/to/files/singer-lab-to-nwb/
 pip install -e .
+
+cd /path/to/files/nwb-conversion-tools/
+pip install -e . 
+cd /path/to/files/singer-lab-to-nwb
 ```
 
 The main conversion script is `convert_singer_lab_data.py`. This script uses the nwb_conversion_tools workflow.
