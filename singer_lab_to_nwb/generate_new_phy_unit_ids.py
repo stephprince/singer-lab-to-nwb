@@ -4,9 +4,9 @@ from phy_unit_id_generator import PhyUnitIDGenerator
 from update_task_conversion_utils import get_file_paths, get_session_info
 
 # set inputs
-animals = [20, 25, 28, 29]
+animals = [33, 34]
 dates_included = []
-dates_excluded = []
+dates_excluded = [220422]
 probe_channels = 64
 
 # load session info
@@ -25,6 +25,7 @@ for name, session in unique_sessions:
     file_paths = get_file_paths(base_path, session_id)
 
     # convert phy ids for each session
+    print(f'Updating ids for {session_id}')
     phy_id_generator = PhyUnitIDGenerator(base_path=file_paths['processed_ephys'],
                                           brain_regions=brain_regions,
                                           probe_channels=probe_channels)
