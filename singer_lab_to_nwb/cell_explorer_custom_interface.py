@@ -123,7 +123,7 @@ class CellExplorerCustomInterface(BaseDataInterface):
                 v = ['good' if unit in value['Good']-1 else 'bad' for unit in range(len(nwbfile.units))]
                 where_bad = [ind+1 for ind, val in enumerate(v) if val == 'bad']  # adjust for 1-indexing
                 if 'Bad' in value:  # if not empty
-                    assert [value['Bad']] == where_bad[:], 'Unit tags incorrectly assigned'
+                    assert [value['Bad']] == where_bad[:] or all(value['Bad'] == where_bad[:]), 'Unit tags incorrectly assigned'
                 sorted_output = np.array(v)[unit_sort_index]
             celltype_data_sorted[key] = sorted_output
 
@@ -174,7 +174,7 @@ class CellExplorerCustomInterface(BaseDataInterface):
             for ind in range(len(nwbfile.units)):
                 phy_spike_count = len(nwbfile.units.get_unit_spike_times(ind))
                 cell_explorer_spike_count = nwbfile.units['spike_count'][ind]
-                assert (phy_spike_count-cell_explorer_spike_count)/phy_spike_count < 0.01  # < 1% difference, see note
+                assert (phy_spike_count-cell_explorer_spike_count)/phy_spike_count < 0.05  # < 5% difference, see note
                 # NOTE: cell explorer removes spikes that are within 0.5 ms of each other.
                 # so the cell explorer spike count will always be less than the phy spike count
                 # this check exists more to verify that the units are being assigned correctly
