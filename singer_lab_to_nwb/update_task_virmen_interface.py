@@ -103,6 +103,12 @@ class UpdateTaskVirmenInterface(BaseDataInterface):
             if t_ends_temp[-1] < t_starts_temp[-1]:
                 t_starts_temp = t_starts_temp[:-1]
 
+            # catch for timeout periods where two extra 't_ends' get counted bc of intertrial interval
+            # only happens where timeout started during intertrial interval I think?
+            while len(t_starts_temp) < len(t_ends_temp):
+                timeout_ind = [ind for ind, start in enumerate(t_starts_temp) if start > t_ends_temp[ind]][0]
+                t_ends_temp = np.delete(t_ends_temp, timeout_ind)
+
             start_ind = start_ind + switch_ind  # add file iteration lengths
             trial_starts.extend(t_starts_temp)
             trial_ends.extend(t_ends_temp)
