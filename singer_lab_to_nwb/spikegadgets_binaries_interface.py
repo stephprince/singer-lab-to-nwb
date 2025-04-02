@@ -115,10 +115,8 @@ class SpikeGadgetsBinariesInterface(BaseDataInterface):
                 if group['name'] is not 'analog_inputs':
                     for index, row in probe_map.iterrows():
                         nwbfile.add_electrode(id=index + num_electrodes,
-                                              x=np.nan, y=np.nan, z=np.nan,
                                               rel_x=row['X'], rel_y=row['Y'], rel_z=row['K'],
                                               reference='ground pellet',
-                                              imp=np.nan,
                                               location=group['location'],
                                               filtering='none',
                                               group=nwbfile.electrode_groups[group['name']])

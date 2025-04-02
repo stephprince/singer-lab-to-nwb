@@ -4,6 +4,7 @@ import pandas as pd
 from pathlib import Path
 from hdmf.backends.hdf5.h5_utils import H5DataIO
 from pynwb import NWBFile
+from pynwb.base import TimeSeries
 from pynwb.device import Device
 from pynwb.ecephys import ElectrodeGroup, ElectricalSeries, LFP
 from pynwb.epoch import TimeIntervals
@@ -131,10 +132,8 @@ class SingerLabPreprocessingInterface(BaseDataInterface):
             if group['name'] is not 'analog_inputs':
                 for index, row in probe_map.iterrows():
                     nwbfile.add_electrode(id=index + num_electrodes,
-                                          x=np.nan, y=np.nan, z=np.nan,
                                           rel_x=row['X'], rel_y=row['Y'], rel_z=row['K'],
                                           reference='ground pellet',
-                                          imp=np.nan,
                                           location=group['location'],
                                           filtering='none',
                                           group=nwbfile.electrode_groups[group['name']])
@@ -281,7 +280,7 @@ def get_electrical_series(channel_dirs, mat_loader, rec_files, signal_name, elec
 
 def get_lfp_decomposition(channel_dirs, mat_loader, rec_files, lfp_ts, metric, units):
     freq_bands = ['delta', 'theta', 'beta', 'lowgamma', 'ripple']
-    limits = [(1, 4), (4, 12), (12, 30), (20, 50), (150, 250)]  # TODO - don't hardcode and pull from somewhere?
+    limits = [(1., 4.), (4., 12.), (12., 30.), (20., 50.), (150., 250.)] 
 
     # get metadata from first channel and file and band (should be same for all)
     filenames = list(channel_dirs[0].glob(f'EEG/{freq_bands[0]}{rec_files}.mat'))
@@ -450,29 +449,14 @@ def get_analog_timeseries(nwbfile, data_folder, mat_loader, rec_files):
         analog_data = mat_loader.run_conversion(analog_filenames, rec_files, 'concat_array')
         metadata = mat_loader.run_conversion(analog_filenames[0], rec_files[0], 'scipy')
 
-        # generate electrodes and electrode region
-        last_electrode = max(nwbfile.electrodes['id'])
-        nwbfile.add_electrode(id=last_electrode + 1,
-                              x=np.nan, y=np.nan, z=np.nan,
-                              rel_x=np.nan, rel_y=np.nan, rel_z=np.nan,
-                              imp=np.nan,
-                              reference='none',
-                              location='none',
-                              filtering='none',
-                              ripple_channel=np.nan, hardware_channel=metadata.adcChannel,
-                              group=nwbfile.electrode_groups['analog_inputs'])
-        elec_table_region = nwbfile.create_electrode_table_region(region=[last_electrode + 1],
-                                                                  description=f'{metadata.descript} {name}')
-
-        # general electrical series objects
-        analog_obj[name] = ElectricalSeries(name=analog_chan_new_names[name],
-                                            data=H5DataIO(analog_data, compression='gzip'),
-                                            starting_time=0.0,
-                                            rate=float(metadata.samprate),
-                                            electrodes=elec_table_region,
-                                            description=analog_descript_dict[name],
-                                            comments=f'includes original 1-based recording file numbers: {rec_files}')
-    return analog_obj
+        # general generic time series objects
+        analog_obj[name] = TimeSeries(name=analog_chan_new_names[name],
+                                        data=H5DataIO(analog_data, compression='gzip'),
+                                        starting_time=0.0,
+                                        rate=float(metadata.samprate),
+                                        description=analog_descript_dict[name],
+                                        comments=f'includes original 1-based recording file numbers: {rec_files}')
+        return analog_obj
 
 
 def get_digital_events(data_folder, rec_durations, mat_loader, rec_files):
