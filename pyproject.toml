@@ -1,0 +1,35 @@
+[project]
+name = "singer-lab-to-nwb"
+version = "0.1.0"
+description = "research code to convert singer lab data to NWB format"
+authors = [
+    {name = "Steph Prince", email = "stephprince16@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.9" 
+dependencies = [
+    "pynwb==3.0.0",
+    "dandi==0.39.6",
+    "nwbinspector==0.6.3",
+    "nwb-conversion-tools==0.11.38"
+]
+
+[tool.poetry]
+package-mode = false
+license = "MIT"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Topic :: Scientific/Engineering",
+]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[project.urls]
+'Homepage' = 'https://github.com/stephprince/singer-lab-to-nwb'
+'Bug Tracker' = 'https://github.com/stephprince/singer-lab-to-nwb/issues'
