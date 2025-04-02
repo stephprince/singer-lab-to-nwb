@@ -7,12 +7,15 @@ authors = [
 ]
 readme = "README.md"
 requires-python = ">=3.9" 
+
 dependencies = [
     "pynwb==3.0.0",
-    "dandi==0.39.6",
     "nwbinspector==0.6.3",
     "nwb-conversion-tools==0.11.38"
 ]
+
+[tool.poetry.extras]
+dandi_upload = ["dandi"]
 
 [tool.poetry]
 package-mode = false
