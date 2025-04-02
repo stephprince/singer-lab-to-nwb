@@ -49,7 +49,7 @@ class SingerLabNWBConverter(NWBConverter):
             session_id = f"{subject_id}_{session_info['Date'].values[0]}"
             date_of_birth = datetime.strptime(str(session_info['DOB'].values[0]), '%y%m%d')
             date_of_recording = datetime.strptime(str(session_info['Date'].values[0]), '%y%m%d')
-            age = f'{(date_of_recording - date_of_birth).days} days'
+            age = f'P{(date_of_recording - date_of_birth).days}D'
         else:
             file_path = [v.source_data['folder_path'] for k, v in self.data_interface_objects.items()
                          if 'folder_path' in v.source_data]
@@ -61,9 +61,9 @@ class SingerLabNWBConverter(NWBConverter):
         metadata.update(
             Subject=dict(
                 subject_id=subject_id,
-                species="Mus Musculus",
+                species="Mus musculus",
                 genotype="Wild type, C57BL/6J",
-                sex="Male",
+                sex="M",
                 age=age,
             )
         )
@@ -91,6 +91,12 @@ class SingerLabNWBConverter(NWBConverter):
         else:
             session_start_time = datetime(1970, 1, 1)  # default value
 
+        # get session description (ecephys+behavior or behavioral only)
+        if 'PreprocessedData' in self.data_interface_objects:
+            session_description = "Electrophysiological recording session of mice performing the update task"
+        else:
+            session_description = "Behavioral training session of mice performing the update task"
+        
         # get git version
         repo = Repo(search_parent_directories=True)
         short_hash = repo.head.object.hexsha[:10]
@@ -98,14 +104,25 @@ class SingerLabNWBConverter(NWBConverter):
 
         # add general experiment info
         metadata['NWBFile'].update(
-            experimenter=["Steph Prince"],
+            experimenter=["Prince, Stephanie"],
             session_id=session_id,
-            institution="Georgia Tech",
+            institution="Georgia Institute of Technology",
             lab="Singer",
-            session_description="Head-fixed mice performed update task in virtual reality",
+            session_description=session_description,
+            experiment_description=("Head-fixed mice were trained to perform a memory-based decision-making "
+                                    "task in virtual reality (the 'update task'). In this y-maze task, "
+                                    "animals were required to navigate between two possible paths using visual "
+                                    "cues. On most trials, the first original cue indicated the final reward "
+                                    "location and was followed by a delay period. However on a subset of trials, "
+                                    "a second visual cue appeared when mice reached a specific location after "
+                                    "a shortened delay period, and animals had to update their initial choice. "
+                                    "After several phases of behavioral training, electrophysiological data was "
+                                    "recorded from hippocampal CA1 and medial prefrontal cortex (mPFC) during "
+                                    "the task."),
             session_start_time=str(session_start_time),
             source_script=f'File created with git repo {remote_url}/tree/{short_hash}',
             source_script_file_name=f'convert_singer_lab_data.py',
+            keywords=['memory', 'spatial navigation', 'decision-making'],
         )
 
         # add spike sorting column info
