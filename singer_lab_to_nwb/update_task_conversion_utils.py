@@ -13,7 +13,8 @@ def get_file_paths(base_path, session_id):
     kilosort_path = Path("sorted/kilosort/new_unit_ids")
     cell_explorer_path = processed_ephys_path / 'cellTypeClassification.mat'
     channel_map_path = Path("Y:/singer/Steph/Code/singer-lab-to-nwb/data/ProbeData/A2x32-Poly5-10mm-20s-200-100-RigC-ProbeMap.csv")
-    nwbfile_path = str(base_path / "DANDIData" / "001371" / f"{session_id}.nwb")
+    local_path = Path("C:/Users/sprince7/Documents")
+    nwbfile_path = str(local_path / "DANDIdata" / "001371" / f"{session_id}.nwb")
 
     return dict(raw_ephys=raw_ephys_path,
                 processed_ephys=processed_ephys_path,
