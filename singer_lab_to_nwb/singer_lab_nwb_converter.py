@@ -5,6 +5,7 @@ from nwb_conversion_tools import NWBConverter, PhySortingInterface
 from readTrodesExtractedDataFile3 import readTrodesExtractedDataFile
 from pathlib import Path
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from cell_explorer_custom_interface import CellExplorerCustomInterface
 from update_task_virmen_interface import UpdateTaskVirmenInterface
@@ -77,7 +78,8 @@ class SingerLabNWBConverter(NWBConverter):
             time_data = readTrodesExtractedDataFile(timestamps_filename[0])
 
             # extract session start time information
-            file_creation_time = datetime.utcfromtimestamp(int(time_data['system_time_at_creation']) / 1e3)  # convert from ms to s
+            file_creation_time = datetime.fromtimestamp(int(time_data['system_time_at_creation']) / 1e3,
+                                                        tz=ZoneInfo("America/New_York"))  # convert from ms to s
             samples_before_start = int(time_data['first_timestamp']) - int(time_data['timestamp_at_creation'])
             session_start_time = file_creation_time + timedelta(seconds=samples_before_start/int(time_data['clockrate']))
         elif 'VirmenData' in self.data_interface_objects:  # otherwise use behavioral data
