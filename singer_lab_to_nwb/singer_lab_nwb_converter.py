@@ -63,6 +63,7 @@ class SingerLabNWBConverter(NWBConverter):
             Subject=dict(
                 subject_id=subject_id,
                 species="Mus musculus",
+                description="Male WT mouse obtained from the Jackson laboratory",
                 genotype="Wild type, C57BL/6J",
                 sex="M",
                 age=age,
