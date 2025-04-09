@@ -455,7 +455,8 @@ def get_analog_timeseries(nwbfile, data_folder, mat_loader, rec_files):
                                         starting_time=0.0,
                                         rate=float(metadata.samprate),
                                         description=analog_descript_dict[name],
-                                        comments=f'includes original 1-based recording file numbers: {rec_files}')
+                                        comments=f'includes original 1-based recording file numbers: {rec_files}',
+                                        unit='volts')
         return analog_obj
 
 
