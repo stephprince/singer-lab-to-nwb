@@ -253,7 +253,7 @@ class UpdateTaskVirmenInterface(BaseDataInterface):
 def create_behavioral_time_series(df, timestamps):
     # make time object
     time = TimeSeries(name='time',
-                      description="time recorded by virmen software since session state time"
+                      description="time recorded by virmen software since session state time",
                       data=H5DataIO(timestamps, compression="gzip"),
                       unit='s',
                       resolution=np.nan,

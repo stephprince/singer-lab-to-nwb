@@ -13,7 +13,7 @@ def get_file_paths(base_path, session_id):
     kilosort_path = Path("sorted/kilosort/new_unit_ids")
     cell_explorer_path = processed_ephys_path / 'cellTypeClassification.mat'
     channel_map_path = Path("Y:/singer/Steph/Code/singer-lab-to-nwb/data/ProbeData/A2x32-Poly5-10mm-20s-200-100-RigC-ProbeMap.csv")
-    nwbfile_path = str(base_path / "NWBData" / "UpdateTask" / f"{session_id}.nwb")
+    nwbfile_path = str(base_path / "DANDIData" / "001371" / f"{session_id}.nwb")
 
     return dict(raw_ephys=raw_ephys_path,
                 processed_ephys=processed_ephys_path,
@@ -59,9 +59,8 @@ def get_module(nwbfile, name, description=None):
     pynwb.module
     """
 
-    # TODO - replace with nwb conversion tools version when I update
-    if name in nwbfile.modules:
-        return nwbfile.modules[name]
+    if name in nwbfile.processing:
+        return nwbfile.processing[name]
     else:
         if description is None:
             description = name
