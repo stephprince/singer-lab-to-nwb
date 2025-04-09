@@ -2,7 +2,7 @@
 import numpy as np
 from datetime import timedelta, datetime
 from scipy.io import loadmat, matlab
-from collections import Iterable
+from collections.abc import Iterable
 
 try:
     from typing import ArrayLike

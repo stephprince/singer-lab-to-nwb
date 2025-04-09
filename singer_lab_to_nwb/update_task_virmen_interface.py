@@ -253,6 +253,7 @@ class UpdateTaskVirmenInterface(BaseDataInterface):
 def create_behavioral_time_series(df, timestamps):
     # make time object
     time = TimeSeries(name='time',
+                      description="time recorded by virmen software since session state time",
                       data=H5DataIO(timestamps, compression="gzip"),
                       unit='s',
                       resolution=np.nan,
@@ -299,7 +300,8 @@ def create_behavioral_time_series(df, timestamps):
                                reference_frame='left is positive, and right is negative because the projector flips '
                                                'the display on the x-axis',
                                resolution=np.nan,
-                               timestamps=H5DataIO(timestamps, compression="gzip")
+                               timestamps=H5DataIO(timestamps, compression="gzip",),
+                               unit='degrees'
                                )
     view_angle_obj.add_spatial_series(view_angle)
 
