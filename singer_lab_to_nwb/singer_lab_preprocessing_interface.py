@@ -129,7 +129,7 @@ class SingerLabPreprocessingInterface(BaseDataInterface):
                                            device=device)
 
             # generate electrodes from probe
-            if group['name'] is not 'analog_inputs':
+            if group['name'] != 'analog_inputs':
                 for index, row in probe_map.iterrows():
                     nwbfile.add_electrode(id=index + num_electrodes,
                                           rel_x=row['X'], rel_y=row['Y'], rel_z=row['K'],
@@ -192,7 +192,7 @@ class SingerLabPreprocessingInterface(BaseDataInterface):
             nwbfile.processing['ecephys'].add(lfp_events)
 
         # extract digital and analog channels using the singer lab mat files
-        analog_obj = get_analog_timeseries(nwbfile, processed_data_folder, mat_loader, rec_files)
+        analog_obj = get_analog_timeseries(processed_data_folder, mat_loader, rec_files)
         for analog_ts in analog_obj.values():
             nwbfile.add_acquisition(analog_ts)
 
@@ -426,7 +426,7 @@ def get_lfp_events(processed_data_folder, br, channel, rec_durations, mat_loader
     return lfp_events
 
 
-def get_analog_timeseries(nwbfile, data_folder, mat_loader, rec_files):
+def get_analog_timeseries(data_folder, mat_loader, rec_files):
     # define analog signals saved in data
     analog_descript_dict = {'licks': 'signal from photointerrupter circuit, values of 5V indicate the mouse tongue is '
                                      'has broken through the laser beam, values of 0V indicate baseline',
@@ -457,7 +457,7 @@ def get_analog_timeseries(nwbfile, data_folder, mat_loader, rec_files):
                                         description=analog_descript_dict[name],
                                         comments=f'includes original 1-based recording file numbers: {rec_files}',
                                         unit='volts')
-        return analog_obj
+    return analog_obj
 
 
 def get_digital_events(data_folder, rec_durations, mat_loader, rec_files):

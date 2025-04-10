@@ -91,8 +91,10 @@ class SingerLabNWBConverter(NWBConverter):
                                      columns=session_data['virmenData']['dataHeaders'])
             virmen_time = virmen_df["time"].apply(lambda x: matlab_time_to_datetime(x))
             session_start_time = virmen_time[0]
+            session_start_time = session_start_time.replace(tzinfo=ZoneInfo("America/New_York"))  # convert to local time
         else:
             session_start_time = datetime(1970, 1, 1)  # default value
+            session_start_time = session_start_time.replace(tzinfo=ZoneInfo("America/New_York"))  # convert to local time
 
         # get session description (ecephys+behavior or behavioral only)
         if 'PreprocessedData' in self.data_interface_objects:

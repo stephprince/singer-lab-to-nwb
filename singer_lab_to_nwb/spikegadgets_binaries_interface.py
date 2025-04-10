@@ -112,7 +112,7 @@ class SpikeGadgetsBinariesInterface(BaseDataInterface):
                                                device=device)
 
                 # generate electrodes from probe
-                if group['name'] is not 'analog_inputs':
+                if group['name'] != 'analog_inputs':
                     for index, row in probe_map.iterrows():
                         nwbfile.add_electrode(id=index + num_electrodes,
                                               rel_x=row['X'], rel_y=row['Y'], rel_z=row['K'],
