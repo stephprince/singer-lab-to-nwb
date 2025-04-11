@@ -11,6 +11,7 @@ from cell_explorer_custom_interface import CellExplorerCustomInterface
 from update_task_virmen_interface import UpdateTaskVirmenInterface
 from singer_lab_preprocessing_interface import SingerLabPreprocessingInterface
 from spikegadgets_binaries_interface import SpikeGadgetsBinariesInterface
+from singer_phy_sorting_interface import SingerPhySortingInterface
 from mat_conversion_utils import convert_mat_file_to_dict, matlab_time_to_datetime
 
 
@@ -25,8 +26,8 @@ class SingerLabNWBConverter(NWBConverter):
         VirmenData=UpdateTaskVirmenInterface,
         PreprocessedData=SingerLabPreprocessingInterface,
         SpikeGadgetsData=SpikeGadgetsBinariesInterface,
-        PhySortingCA1=PhySortingInterface,
-        PhySortingPFC=PhySortingInterface,  # I feel like there must be a better way to implement but leaving for now
+        PhySortingCA1=SingerPhySortingInterface,
+        PhySortingPFC=SingerPhySortingInterface,  # I feel like there must be a better way to implement but leaving for now
         CellExplorer=CellExplorerCustomInterface,
     )
 
@@ -136,5 +137,12 @@ class SingerLabNWBConverter(NWBConverter):
             metadata["Ecephys"]["UnitProperties"].extend([dict(name='Amplitude', description='amplitude imported from phy'),
                                                           dict(name='ContamPct', description='contampct imported from phy'),
                                                           dict(name='KSLabel', description='auto-label (pre phy curation)'),
+                                                          dict(name='amp', description='amplitude imported from phy'),
+                                                          dict(name='ch', description='channel number impoted from phy'),
+                                                          dict(name='depth', description='depth imported from phy'),
+                                                          dict(name='fr', description='firing rate imported from phy'),
+                                                          dict(name='n_spikes', description='number of spikes imported from phy'),
+                                                          dict(name='original_cluster_id',
+                                                               description='original cluster id imported from phy'),
                                                  dict(name='quality', description='manual-label (post phy curation)')])
         return metadata
