@@ -4,9 +4,9 @@ from singer_lab_nwb_converter import SingerLabNWBConverter
 from update_task_conversion_utils import get_file_paths, get_session_info
 
 # set inputs
-animals = [17]  # all animals: 17, 20, 25, 28, 29, 33, 34
+animals = [20]  # all animals: 17, 20, 25, 28, 29, 33, 34
 dates_included = []
-dates_excluded = []  # 210408
+dates_excluded = []
 
 # load session info
 base_path = Path("Y:/singer")  # ALL file paths will be based on this base directory

@@ -376,7 +376,10 @@ def get_lfp_events(processed_data_folder, br, channel, rec_durations, mat_loader
             # load up the data
             matin = mat_loader.run_conversion(file, file.stem.strip(band), 'scipy')
             num_events = np.size(matin.startind)
-            samp_rate = matin.samprate or 2000  # TODO - make this not hardcoded, time*samples to adjust index
+            if matin.samprate is None or (hasattr(matin.samprate, 'size') and matin.samprate.size == 0):
+                samp_rate = 2000
+            else:
+                samp_rate = matin.samprate
 
             # get values that occur for each event
             temp_data = []
@@ -418,7 +421,7 @@ def get_lfp_events(processed_data_folder, br, channel, rec_durations, mat_loader
             event_df = pd.DataFrame(event_data, columns=column_dict.keys())
             event_dict = event_df.to_dict('records')
             for e in event_dict:
-                events.add_row(e)
+                events.add_row(e, check_ragged=False)
 
         # add to output data structure
         lfp_events[band] = events
@@ -514,6 +517,6 @@ def get_digital_events(data_folder, rec_durations, mat_loader, rec_files):
 
         assert (len(all_on_times) == len(all_off_times))
         for start, stop in zip(all_on_times, all_off_times):
-            digital_obj[name].add_row(start_time=start, stop_time=stop)
+            digital_obj[name].add_row(start_time=start, stop_time=stop, check_ragged=False)
 
     return digital_obj
