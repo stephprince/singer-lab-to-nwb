@@ -5,7 +5,8 @@ from hdmf.data_utils import AbstractDataChunkIterator, DataChunk  # noqa: F811
 
 class MultiFileArrayIterator(AbstractDataChunkIterator):
 
-    def __init__(self, channel_dirs, filename, mat_loader, recs, num_steps, ):
+    def __init__(self, channel_dirs, filename, mat_loader, recs, num_steps, 
+                 chunk_mb: float = 10.0):
         """
         :param channel_dirs: List of dirs with channel specific data
         :param num_steps: Number of timesteps per channel
@@ -18,6 +19,8 @@ class MultiFileArrayIterator(AbstractDataChunkIterator):
         self.recs = recs
         self.num_steps = num_steps
         self.__curr_index = 0
+
+        self.chunk_shape = self._get_default_chunk_shape(chunk_mb=chunk_mb)
 
     def __iter__(self):
         return self
@@ -46,7 +49,7 @@ class MultiFileArrayIterator(AbstractDataChunkIterator):
     next = __next__
 
     def recommended_chunk_shape(self):
-        return None   # Use autochunking
+        return self.chunk_shape
 
     def recommended_data_shape(self):
         return self.shape
@@ -59,10 +62,21 @@ class MultiFileArrayIterator(AbstractDataChunkIterator):
     def maxshape(self):
         return self.shape
 
+    def _get_default_chunk_shape(self, chunk_mb: float = 10.0) -> tuple[int, int]:
+        assert chunk_mb > 0, f"chunk_mb ({chunk_mb}) must be greater than zero!"
+
+        number_of_channels = self.shape[1]  # number of channel directories
+
+        chunk_shape = get_electrical_series_chunk_shape(
+            number_of_channels=number_of_channels, dtype=self.dtype, chunk_mb=chunk_mb
+        )
+
+        return chunk_shape
 
 class MultiDimMultiFileArrayIterator(MultiFileArrayIterator):
 
-    def __init__(self, channel_dirs, dim_names, mat_loader, recs, num_samples, metric_row):
+    def __init__(self, channel_dirs, dim_names, mat_loader, recs, num_samples, metric_row, 
+                 chunk_mb: float = 10.0):
         """
         :param channel_dirs: List of dirs with channel specific data
         :param num_steps: Number of timesteps per channel
@@ -76,6 +90,9 @@ class MultiDimMultiFileArrayIterator(MultiFileArrayIterator):
         self.metric_row = metric_row  # which row to use (e.g. phase, amplitude, or envelope)
         self.num_chunks = len(channel_dirs)*len(dim_names)
         self.__curr_chunk = 0
+
+        chunk_shape = self._get_default_chunk_shape(chunk_mb=chunk_mb)
+        self.chunk_shape = (chunk_shape[0], chunk_shape[1], 1)  # add 1 for last dimension
 
     def __next__(self):
         """
@@ -104,7 +121,8 @@ class MultiDimMultiFileArrayIterator(MultiFileArrayIterator):
 
 class MultiFileSpikeGadgetsIterator(MultiFileArrayIterator):
 
-    def __init__(self, filenames, data_loader, recs, num_channels, num_samples_per_rec):
+    def __init__(self, filenames, data_loader, recs, num_channels, num_samples_per_rec,
+                 chunk_mb: float = 10.0):
         """
         :param channel_dirs: List of dirs with channel specific data
         :param num_steps: Number of timesteps per channel
@@ -118,6 +136,8 @@ class MultiFileSpikeGadgetsIterator(MultiFileArrayIterator):
         self.num_samples_per_rec = num_samples_per_rec
         self.num_chunks = len(filenames)
         self.__curr_chunk = 0
+
+        self.chunk_shape = self._get_default_chunk_shape(chunk_mb=chunk_mb)
 
     def __next__(self):
         """
@@ -147,3 +167,44 @@ class MultiFileSpikeGadgetsIterator(MultiFileArrayIterator):
     @property
     def dtype(self):
         return np.dtype('int64')
+
+
+def get_electrical_series_chunk_shape(
+        number_of_channels: int, 
+        dtype: np.dtype, 
+        chunk_mb: float = 10.0) -> tuple[int, int]:
+    """
+    Estimate good chunk shape for an ElectricalSeries dataset.
+
+    This function gives good estimates for cloud access patterns.
+
+    Parameters
+    ----------
+    number_of_channels : int
+        The number of channels in the ElectricalSeries dataset.
+    number_of_frames : int
+        The number of frames in the ElectricalSeries dataset.
+    dtype : np.dtype
+        The data type of the ElectricalSeries dataset.
+    chunk_mb : float, optional
+        The upper bound on size in megabytes (MB) of the internal chunk for the HDF5 dataset.
+        The chunk_shape will be set implicitly by this argument.
+
+    Returns
+    -------
+    tuple[int, int]
+        The chunk shape for the ElectricalSeries dataset.
+    """
+    assert chunk_mb > 0, f"chunk_mb ({chunk_mb}) must be greater than zero!"
+
+    # We use 64 channels as that gives enough time for common sampling rates when chunk_mb == 10.0
+    # See # from https://github.com/flatironinstitute/neurosift/issues/52#issuecomment-1671405249
+    chunk_channels = min(64, number_of_channels)
+
+    size_of_chunk_channels_bytes = chunk_channels * dtype.itemsize
+    total_chunk_space_bytes = chunk_mb * 1e6
+
+    # We allocate as many frames as possible with the remaining space of the chunk
+    chunk_frames = total_chunk_space_bytes // size_of_chunk_channels_bytes
+
+    return (chunk_frames, chunk_channels)
